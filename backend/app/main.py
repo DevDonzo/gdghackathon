@@ -1,0 +1,294 @@
+from __future__ import annotations
+
+import asyncio
+import mimetypes
+import json
+from datetime import UTC, datetime
+from typing import Any
+
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response, StreamingResponse
+from pydantic import ValidationError
+from pymongo import ReturnDocument
+
+from backend.app.core.config import get_settings
+from backend.app.db.mongo import ensure_indexes, get_collections, get_database
+from backend.app.models.schemas import (
+    InvalidObjectIdError,
+    NegotiationCreateRequest,
+    object_id,
+    serialize_bill,
+    serialize_negotiation,
+    serialize_turn,
+)
+from backend.app.services.events import encode_sse, publish, subscribe, unsubscribe
+from backend.app.services.extraction import DEMO_BILLS, demo_bill_fixture, extract_bill_data
+from backend.app.services.negotiation import create_negotiation_document, resume_in_progress_negotiations, schedule_negotiation_run
+from backend.app.services.twilio_voice import launch_sandbox_call, negotiation_twiml, update_call_status
+
+
+app = FastAPI(title="RateDrop API", version="0.1.0")
+settings = get_settings()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:3000",
+        "http://localhost:3000",
+        settings.frontend_base_url,
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.on_event("startup")
+async def startup() -> None:
+    ensure_indexes()
+    resume_in_progress_negotiations()
+
+
+@app.exception_handler(InvalidObjectIdError)
+async def invalid_object_id_handler(_: Request, exc: InvalidObjectIdError) -> JSONResponse:
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+@app.get("/health")
+def healthcheck() -> dict[str, str]:
+    get_database().command("ping")
+    return {"status": "ok"}
+
+
+@app.post("/api/bills/upload")
+async def upload_bill(file: UploadFile = File(...)) -> JSONResponse:
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="A bill file is required.")
+    content_type = file.content_type or mimetypes.guess_type(file.filename)[0] or ""
+    if not (content_type == "application/pdf" or content_type.startswith("image/")):
+        raise HTTPException(status_code=400, detail="Upload a PDF or image file.")
+
+    payload = await file.read()
+    extraction = extract_bill_data(payload, file.filename, content_type or "application/octet-stream")
+
+    collections = get_collections()
+    bill_doc = {
+        "filename": file.filename,
+        "provider": extraction.provider,
+        "currency": extraction.currency,
+        "monthlyTotal": extraction.monthly_total,
+        "planName": extraction.plan_name,
+        "lineItems": [item.model_dump(mode="json") for item in extraction.line_items],
+        "negotiationAngles": extraction.negotiation_angles,
+        "redFlags": extraction.red_flags,
+        "extractionConfidence": extraction.confidence,
+        "contentType": content_type,
+        "createdAt": datetime.now(UTC),
+    }
+    inserted = collections["bills"].insert_one(bill_doc)
+    stored = collections["bills"].find_one({"_id": inserted.inserted_id})
+    if not stored:
+        raise HTTPException(status_code=500, detail="Bill extraction could not be stored.")
+    return JSONResponse(serialize_bill(stored).model_dump(mode="json"))
+
+
+@app.get("/api/demo-bills")
+def list_demo_bills() -> JSONResponse:
+    items = []
+    for scenario_id, fixture in DEMO_BILLS.items():
+        items.append(
+            {
+                "id": scenario_id,
+                "label": f"{fixture['provider']} demo",
+                "provider": fixture["provider"],
+                "monthlyTotal": fixture["monthlyTotal"],
+                "headlineAngle": fixture["negotiationAngles"][0],
+            }
+        )
+    return JSONResponse({"items": items})
+
+
+@app.post("/api/bills/demo/{scenario_id}")
+def create_demo_bill(scenario_id: str) -> JSONResponse:
+    try:
+        filename, extraction = demo_bill_fixture(scenario_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Demo bill not found.") from error
+
+    collections = get_collections()
+    bill_doc = {
+        "filename": filename,
+        "preferredScenarioId": DEMO_BILLS[scenario_id].get("preferredScenarioId"),
+        "provider": extraction.provider,
+        "currency": extraction.currency,
+        "monthlyTotal": extraction.monthly_total,
+        "planName": extraction.plan_name,
+        "lineItems": [item.model_dump(mode="json") for item in extraction.line_items],
+        "negotiationAngles": extraction.negotiation_angles,
+        "redFlags": extraction.red_flags,
+        "extractionConfidence": extraction.confidence,
+        "contentType": "application/pdf",
+        "createdAt": datetime.now(UTC),
+        "source": "demo",
+    }
+    inserted = collections["bills"].insert_one(bill_doc)
+    stored = collections["bills"].find_one({"_id": inserted.inserted_id})
+    if not stored:
+        raise HTTPException(status_code=500, detail="Demo bill could not be created.")
+    return JSONResponse(serialize_bill(stored).model_dump(mode="json"))
+
+
+@app.get("/api/bills/{bill_id}")
+def get_bill(bill_id: str) -> JSONResponse:
+    bill = get_collections()["bills"].find_one({"_id": object_id(bill_id)})
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found.")
+    return JSONResponse(serialize_bill(bill).model_dump(mode="json"))
+
+
+@app.api_route("/api/negotiations", methods=["GET", "POST"])
+async def negotiations_collection(request: Request, limit: int = 8) -> JSONResponse:
+    if request.method == "GET":
+        safe_limit = max(1, min(limit, 20))
+        negotiations = [
+            serialize_negotiation(item).model_dump(mode="json")
+            for item in get_collections()["negotiations"].find().sort("createdAt", -1).limit(safe_limit)
+        ]
+        return JSONResponse({"items": negotiations})
+
+    try:
+        payload = await request.json()
+        create_request = NegotiationCreateRequest.model_validate(payload)
+    except (json.JSONDecodeError, ValidationError, ValueError) as error:
+        raise HTTPException(status_code=400, detail="Invalid negotiation request payload.") from error
+
+    collections = get_collections()
+    bill = collections["bills"].find_one({"_id": object_id(create_request.billId)})
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found.")
+
+    document = create_negotiation_document(bill)
+    inserted = collections["negotiations"].insert_one(document)
+    stored = collections["negotiations"].find_one({"_id": inserted.inserted_id})
+    if not stored:
+        raise HTTPException(status_code=500, detail="Negotiation could not be created.")
+    return JSONResponse(serialize_negotiation(stored).model_dump(mode="json"))
+
+
+@app.post("/api/negotiations/{negotiation_id}/start")
+async def start_negotiation(negotiation_id: str, request: Request) -> JSONResponse:
+    collections = get_collections()
+    negotiation_object_id = object_id(negotiation_id)
+    negotiation = collections["negotiations"].find_one({"_id": negotiation_object_id})
+    if not negotiation:
+        raise HTTPException(status_code=404, detail="Negotiation not found.")
+    if negotiation["status"] != "draft":
+        return JSONResponse(serialize_negotiation(negotiation).model_dump(mode="json"))
+
+    now = datetime.now(UTC)
+    call = launch_sandbox_call(negotiation_id, request)
+    current = collections["negotiations"].find_one_and_update(
+        {"_id": negotiation_object_id, "status": "draft"},
+        {
+            "$set": {
+                "status": "in-progress",
+                "startedAt": now,
+                "currentObjective": "Dialing sandbox carrier line"
+                if call.get("mode") == "sandbox"
+                else "Running simulated negotiation flow",
+                "call": call,
+            }
+        },
+        return_document=ReturnDocument.AFTER,
+    )
+    if not current:
+        latest = collections["negotiations"].find_one({"_id": negotiation_object_id})
+        if not latest:
+            raise HTTPException(status_code=404, detail="Negotiation not found.")
+        return JSONResponse(serialize_negotiation(latest).model_dump(mode="json"))
+
+    if current:
+        await publish(negotiation_id, "status", {"negotiation": serialize_negotiation(current).model_dump(mode="json")})
+    schedule_negotiation_run(negotiation_id)
+
+    refreshed = collections["negotiations"].find_one({"_id": negotiation_object_id})
+    return JSONResponse(serialize_negotiation(refreshed).model_dump(mode="json"))
+
+
+@app.get("/api/negotiations/{negotiation_id}")
+def get_negotiation(negotiation_id: str) -> JSONResponse:
+    negotiation = get_collections()["negotiations"].find_one({"_id": object_id(negotiation_id)})
+    if not negotiation:
+        raise HTTPException(status_code=404, detail="Negotiation not found.")
+    return JSONResponse(serialize_negotiation(negotiation).model_dump(mode="json"))
+
+
+@app.get("/api/negotiations/{negotiation_id}/transcript")
+def get_transcript(negotiation_id: str) -> JSONResponse:
+    collections = get_collections()
+    negotiation = collections["negotiations"].find_one({"_id": object_id(negotiation_id)})
+    if not negotiation:
+        raise HTTPException(status_code=404, detail="Negotiation not found.")
+
+    turns = [
+        serialize_turn(turn)
+        for turn in collections["turns"].find({"negotiationId": negotiation["_id"]}).sort("createdAt", 1)
+    ]
+    return JSONResponse({"turns": turns})
+
+
+@app.get("/api/negotiations/{negotiation_id}/events")
+async def negotiation_events(negotiation_id: str) -> StreamingResponse:
+    collections = get_collections()
+    negotiation = collections["negotiations"].find_one({"_id": object_id(negotiation_id)})
+    if not negotiation:
+        raise HTTPException(status_code=404, detail="Negotiation not found.")
+
+    async def event_stream():
+        queue = subscribe(negotiation_id)
+        try:
+            turns = [
+                serialize_turn(turn)
+                for turn in collections["turns"].find({"negotiationId": negotiation["_id"]}).sort("createdAt", 1)
+            ]
+            current = collections["negotiations"].find_one({"_id": negotiation["_id"]})
+            if current:
+                yield encode_sse(
+                    "snapshot",
+                    {"negotiation": serialize_negotiation(current).model_dump(mode="json"), "turns": turns},
+                )
+            while True:
+                try:
+                    message = await asyncio.wait_for(queue.get(), timeout=15)
+                except asyncio.TimeoutError:
+                    yield ": keep-alive\n\n"
+                    continue
+                yield message
+        finally:
+            unsubscribe(negotiation_id, queue)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/twilio/voice/negotiations/{negotiation_id}")
+@app.get("/twilio/voice/negotiations/{negotiation_id}")
+def twilio_voice_negotiation(negotiation_id: str, request: Request, step: int = 0) -> Response:
+    negotiation = get_collections()["negotiations"].find_one({"_id": object_id(negotiation_id)})
+    if not negotiation:
+        raise HTTPException(status_code=404, detail="Negotiation not found.")
+    return Response(content=negotiation_twiml(negotiation, request, step), media_type="application/xml")
+
+
+@app.post("/twilio/status/{negotiation_id}")
+async def twilio_status(negotiation_id: str, request: Request) -> Response:
+    form = await request.form()
+    payload = {key: str(value) for key, value in form.items()}
+    current = update_call_status(negotiation_id, payload)
+    if current:
+        await publish(negotiation_id, "status", {"negotiation": serialize_negotiation(current).model_dump(mode="json")})
+    return Response(content="", media_type="text/plain")
