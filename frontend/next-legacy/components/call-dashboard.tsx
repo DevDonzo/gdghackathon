@@ -21,6 +21,9 @@ export function CallDashboard({ negotiationId }: Props) {
     if (!negotiation) {
       return "loading";
     }
+    if (negotiation.status === "failed") {
+      return "failed";
+    }
     if (negotiation.status === "completed" && negotiation.call.status !== "failed") {
       return "completed";
     }
@@ -31,11 +34,19 @@ export function CallDashboard({ negotiationId }: Props) {
     if (!negotiation) {
       return "Negotiation";
     }
+    if (negotiation.status === "failed") {
+      return `${negotiation.provider} negotiation failed`;
+    }
     if (negotiation.status === "completed") {
       return `${negotiation.provider} negotiation complete`;
     }
     return `${negotiation.provider} negotiation in progress`;
   }, [negotiation]);
+
+  const progress = useMemo(() => {
+    const totalSteps = 8;
+    return Math.min(100, Math.round((turns.length / totalSteps) * 100));
+  }, [turns.length]);
 
   useEffect(() => {
     let active = true;
@@ -123,84 +134,118 @@ export function CallDashboard({ negotiationId }: Props) {
 
   return (
     <main className="page-shell">
+      <header className="subpage-topbar">
+        <Link className="brand-lockup" href="/">
+          <div className="brand-mark">R</div>
+          <div>
+            <strong>RateDrop</strong>
+            <small>Voice Sandbox</small>
+          </div>
+        </Link>
+        <div className="topbar-status">
+          <span className="status-dot" />
+          Live Transcript Active
+        </div>
+      </header>
+
       <section className="call-layout">
         <div className="call-stage card">
           <div className="call-stage-header">
             <div>
-              <span className="section-tag">Live sandbox call</span>
-              <h1>{pageTitle}</h1>
+              <span className="section-tag">Sandbox Stream</span>
+              <h2>{pageTitle}</h2>
             </div>
             <div className={`status-pill status-${negotiation.status}`}>{negotiation.status.replace("-", " ")}</div>
           </div>
 
-          <div className="call-meta-grid">
-            <div className="stat-card">
-              <span>Current objective</span>
-              <strong>{negotiation.currentObjective}</strong>
+          <div className="progress-block">
+            <div className="progress-meta">
+              <strong>{turns.length} Turns Captured</strong>
+              <span>{progress}% Path Complete</span>
             </div>
-            <div className="stat-card">
-              <span>Sandbox call</span>
-              <strong>{displayCallStatus}</strong>
-            </div>
-            <div className="stat-card">
-              <span>Best live offer</span>
-              <strong>{negotiation.bestOfferMonthly ? `${money(negotiation.bestOfferMonthly)}/mo` : "Waiting for rep offer"}</strong>
+            <div className="progress-track" aria-hidden="true">
+              <span style={{ width: `${progress}%` }} />
             </div>
           </div>
 
-          {negotiation.call.error ? <div className="error-banner">{negotiation.call.error}</div> : null}
-          {negotiation.status === "completed" ? <div className="callout-banner">Negotiation finished. Redirecting to the result page.</div> : null}
-          {error ? <div className="error-banner">{error}</div> : null}
+          <div className="call-meta-grid">
+            <div className="stat-card">
+              <span>Objective</span>
+              <strong>{negotiation.currentObjective}</strong>
+            </div>
+            <div className="stat-card">
+              <span>Best Offer</span>
+              <strong>{negotiation.bestOfferMonthly ? `${money(negotiation.bestOfferMonthly)}/mo` : "Pending"}</strong>
+            </div>
+          </div>
+
+          {negotiation.status === "in-progress" && !negotiation.call.error ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', background: 'var(--bg-subtle)', borderRadius: '8px', marginBottom: '32px' }}>
+              <div className="voice-wave" aria-hidden="true">
+                {[0, 1, 2, 3, 4, 5, 6].map((index) => (
+                  <span className="voice-wave-bar" key={`left-${index}`} />
+                ))}
+              </div>
+              <span style={{ fontSize: '0.85rem', fontWeight: '600', letterSpacing: '0.05em' }}>NEGOTIATION ACTIVE</span>
+            </div>
+          ) : null}
 
           <div className="transcript-stream">
             {turns.length === 0 ? (
-              <div className="empty-state">The call is dialing. Transcript turns will appear here as the negotiation advances.</div>
+              <div className="empty-state">Dialing...</div>
             ) : null}
             {turns.map((turn, index) => (
               <article className={`transcript-card role-${turn.role}`} key={`${turn.createdAt}-${index}`}>
                 <div className="transcript-head">
-                  <strong>{turn.role === "negotiator" ? "RateDrop" : "Carrier rep"}</strong>
-                  <span>{turn.objective}</span>
+                  <strong>{turn.role === "negotiator" ? "RateDrop" : "Carrier Rep"}</strong>
+                  <span>{turn.intent.replaceAll("_", " ")}</span>
                 </div>
                 <p>{turn.text}</p>
-                {turn.proposedMonthly ? <small>Offer on table: {money(turn.proposedMonthly)}/mo</small> : null}
-                {turn.credit ? <small>Credit offered: {money(turn.credit)}</small> : null}
+                {turn.proposedMonthly || turn.credit ? (
+                  <div style={{ marginTop: '12px', padding: '8px', background: 'var(--bg)', borderRadius: '4px', fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }}>
+                    {turn.proposedMonthly ? <div>Offer: {money(turn.proposedMonthly)}/mo</div> : null}
+                    {turn.credit ? <div>Credit: {money(turn.credit)}</div> : null}
+                  </div>
+                ) : null}
               </article>
             ))}
           </div>
         </div>
 
         <aside className="sidebar-stack">
-          <div className="card sidebar-panel">
-            <span className="section-tag">Negotiation frame</span>
-            <h2>{negotiation.scenarioLabel}</h2>
+          <div className="card sidebar-panel" style={{ background: 'var(--bg-subtle)' }}>
+            <span className="section-tag">Scenario</span>
+            <h3>{negotiation.scenarioLabel}</h3>
             <div className="sidebar-stats">
               <div>
-                <span>Current bill</span>
-                <strong>{money(negotiation.currentMonthly)}/mo</strong>
+                <span>Current Bill</span>
+                <strong>{money(negotiation.currentMonthly)}</strong>
               </div>
               <div>
                 <span>Target</span>
-                <strong>{money(negotiation.targetMonthly)}/mo</strong>
-              </div>
-              <div>
-                <span>Walk-away</span>
-                <strong>{money(negotiation.walkAwayMonthly)}/mo</strong>
+                <strong>{money(negotiation.targetMonthly)}</strong>
               </div>
             </div>
+            <p style={{ fontSize: '0.8rem', color: 'var(--foreground-muted)', marginTop: '16px' }}>
+              Deterministic path selected based on extracted bill facts.
+            </p>
           </div>
 
-          <div className="card sidebar-panel">
-            <span className="section-tag">Call output</span>
-            <h2>What the demo is proving</h2>
-            <ul className="bullet-list">
-              <li>The bill facts are grounding the conversation.</li>
-              <li>The turn sequence follows a deterministic concession policy.</li>
-              <li>Any savings shown on the result page are calculated outside the model.</li>
-            </ul>
+          <div className="card sidebar-panel" style={{ border: '1px solid var(--paper-border)' }}>
+            <span className="section-tag">Session Info</span>
+            <div className="sidebar-stats">
+              <div>
+                <span>Duration</span>
+                <strong>Live</strong>
+              </div>
+              <div>
+                <span>Mode</span>
+                <strong>{negotiation.call.mode}</strong>
+              </div>
+            </div>
             {negotiation.status === "completed" ? (
-              <Link className="primary-button link-button" href={`/result/${negotiation.id}`}>
-                View result
+              <Link className="primary-button" href={`/result/${negotiation.id}`}>
+                View Results
               </Link>
             ) : null}
           </div>

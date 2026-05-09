@@ -42,7 +42,7 @@ export type NegotiationResult = {
 export type Negotiation = {
   id: string;
   billId: string;
-  status: "draft" | "in-progress" | "completed";
+  status: "draft" | "in-progress" | "completed" | "failed";
   scenarioId: string;
   scenarioLabel: string;
   provider: string;

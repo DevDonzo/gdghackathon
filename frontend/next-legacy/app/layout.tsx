@@ -1,9 +1,15 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
+
+const sans = Inter({
+  subsets: ["latin"],
+  variable: "--font-sans"
+});
 
 export const metadata: Metadata = {
   title: "RateDrop",
-  description: "Upload a telecom bill, run a sandbox negotiation, and see the savings."
+  description: "Autonomous telecom bill negotiation engine."
 };
 
 export default function RootLayout({
@@ -13,7 +19,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className={`${sans.variable}`}>{children}</body>
     </html>
   );
 }

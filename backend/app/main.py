@@ -3,17 +3,20 @@ from __future__ import annotations
 import asyncio
 import mimetypes
 import json
+import logging
+from pathlib import Path
 from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 from pymongo import ReturnDocument
 
 from backend.app.core.config import get_settings
-from backend.app.db.mongo import ensure_indexes, get_collections, get_database
+from backend.app.db.mongo import database_mode, ensure_indexes, get_collections, get_database
 from backend.app.models.schemas import (
     InvalidObjectIdError,
     NegotiationCreateRequest,
@@ -25,11 +28,14 @@ from backend.app.models.schemas import (
 from backend.app.services.events import encode_sse, publish, subscribe, unsubscribe
 from backend.app.services.extraction import DEMO_BILLS, demo_bill_fixture, extract_bill_data
 from backend.app.services.negotiation import create_negotiation_document, resume_in_progress_negotiations, schedule_negotiation_run
-from backend.app.services.twilio_voice import launch_sandbox_call, negotiation_twiml, update_call_status
+from backend.app.services.twilio_voice import launch_sandbox_call, negotiation_twiml, twilio_readiness, update_call_status
 
 
 app = FastAPI(title="RateDrop API", version="0.1.0")
 settings = get_settings()
+STATIC_DIR = Path(__file__).resolve().parents[2] / "frontend" / "static"
+INDEX_FILE = STATIC_DIR / "index.html"
+logger = logging.getLogger(__name__)
 
 app.add_middleware(
     CORSMiddleware,
@@ -43,11 +49,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
 
 @app.on_event("startup")
 async def startup() -> None:
-    ensure_indexes()
-    resume_in_progress_negotiations()
+    try:
+        ensure_indexes()
+        resume_in_progress_negotiations()
+    except Exception as error:  # pragma: no cover - allows static shell to load when Atlas is unavailable
+        logger.warning("RateDrop startup dependency check failed: %s", error)
 
 
 @app.exception_handler(InvalidObjectIdError)
@@ -57,8 +68,29 @@ async def invalid_object_id_handler(_: Request, exc: InvalidObjectIdError) -> JS
 
 @app.get("/health")
 def healthcheck() -> dict[str, str]:
-    get_database().command("ping")
-    return {"status": "ok"}
+    if database_mode() == "mongo":
+        get_database().command("ping")
+    return {"status": "ok", "database": database_mode()}
+
+
+@app.get("/api/readiness")
+def readiness(request: Request) -> JSONResponse:
+    mongo_ready = database_mode() == "memory"
+    if database_mode() == "mongo":
+        try:
+            get_database().command("ping")
+            mongo_ready = True
+        except Exception:
+            mongo_ready = False
+
+    return JSONResponse(
+        {
+            "status": "ok" if mongo_ready else "degraded",
+            "database": {"mode": database_mode(), "ready": mongo_ready},
+            "gemini": {"configured": bool(settings.gemini_api_key), "model": settings.gemini_model},
+            "twilio": twilio_readiness(request),
+        }
+    )
 
 
 @app.post("/api/bills/upload")
@@ -168,7 +200,14 @@ async def negotiations_collection(request: Request, limit: int = 8) -> JSONRespo
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found.")
 
-    document = create_negotiation_document(bill)
+    custom_angles = [item.strip() for item in create_request.customAngles if item.strip()][:4]
+    negotiation_bill = dict(bill)
+    if custom_angles:
+        existing_angles = list(bill.get("negotiationAngles", []))
+        negotiation_bill["negotiationAngles"] = [*existing_angles, *[angle for angle in custom_angles if angle not in existing_angles]]
+
+    document = create_negotiation_document(negotiation_bill)
+    document["customAngles"] = custom_angles
     inserted = collections["negotiations"].insert_one(document)
     stored = collections["negotiations"].find_one({"_id": inserted.inserted_id})
     if not stored:
@@ -292,3 +331,18 @@ async def twilio_status(negotiation_id: str, request: Request) -> Response:
     if current:
         await publish(negotiation_id, "status", {"negotiation": serialize_negotiation(current).model_dump(mode="json")})
     return Response(content="", media_type="text/plain")
+
+
+@app.get("/")
+def frontend_home() -> FileResponse:
+    return FileResponse(INDEX_FILE)
+
+
+@app.get("/call/{negotiation_id}")
+def frontend_call(negotiation_id: str) -> FileResponse:
+    return FileResponse(INDEX_FILE)
+
+
+@app.get("/result/{negotiation_id}")
+def frontend_result(negotiation_id: str) -> FileResponse:
+    return FileResponse(INDEX_FILE)

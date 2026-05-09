@@ -6,9 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "dev:api": "python3 -m uvicorn backend.app.main:app --reload --port 8000"
+    "dev:api": ".venv/bin/python -m uvicorn backend.app.main:app --reload --port 8000"
   },
   "dependencies": {
+    "@types/canvas-confetti": "^1.9.0",
+    "canvas-confetti": "^1.9.4",
     "next": "15.3.2",
     "react": "19.1.0",
     "react-dom": "19.1.0"

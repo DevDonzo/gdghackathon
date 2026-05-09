@@ -16,6 +16,7 @@ def request_json(path: str, method: str = "GET", payload: dict | None = None) ->
     if payload is not None:
         body = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"
+    headers["X-RateDrop-Simulated-Call"] = "1"
 
     request = Request(f"{API_BASE}{path}", data=body, method=method, headers=headers)
     try:

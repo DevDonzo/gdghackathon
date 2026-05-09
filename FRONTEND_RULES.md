@@ -2,7 +2,7 @@
 
 This document is for frontend work on RateDrop.
 
-The frontend should make the product feel polished and clear without changing how the backend works.
+The active frontend is plain HTML, CSS, and JavaScript in [`frontend/static/`](/Users/hparacha/Projects/gdghackathon/frontend/static).
 
 ## What Frontend Owns
 
@@ -23,7 +23,6 @@ Do not change these unless the backend owner explicitly asks for it:
 
 - API routes
 - API response shapes
-- `lib/types.ts`
 - negotiation logic
 - savings math
 - Mongo document structure
@@ -31,22 +30,17 @@ Do not change these unless the backend owner explicitly asks for it:
 
 ## Main Files To Work In
 
-- `app/page.tsx`
-- `app/call/[id]/page.tsx`
-- `app/result/[id]/page.tsx`
-- `components/upload-panel.tsx`
-- `components/call-dashboard.tsx`
-- `components/result-summary.tsx`
-- `app/globals.css`
+- [`frontend/static/index.html`](/Users/hparacha/Projects/gdghackathon/frontend/static/index.html)
+- [`frontend/static/styles.css`](/Users/hparacha/Projects/gdghackathon/frontend/static/styles.css)
+- [`frontend/static/app.js`](/Users/hparacha/Projects/gdghackathon/frontend/static/app.js)
 
-Read for context:
+Reference only:
 
-- `lib/api.ts`
-- `lib/types.ts`
+- [`frontend/next-legacy/`](/Users/hparacha/Projects/gdghackathon/frontend/next-legacy)
 
 ## Current Frontend Flow
 
-1. Home page loads demo bills and recent negotiations
+1. Home page loads
 2. User uploads a file or picks a demo bill
 3. UI renders extracted bill details
 4. User starts negotiation
@@ -56,24 +50,25 @@ Read for context:
 
 ## Design Direction
 
-The UI should feel like a focused consumer product, not an internal dashboard.
+The UI should feel like a focused consumer product, not an internal dashboard or hackathon demo site.
 
 Priorities:
 
 - clear hierarchy
+- restraint
+- strong typography
 - fast comprehension
-- strong before/after storytelling
 - visible trust signals
 - readable transcript progression
 - clean mobile layout
 
 Avoid:
 
-- generic enterprise dashboard styling
-- cluttered cards everywhere
-- excessive labels with weak hierarchy
-- overdesigned gradients with poor contrast
-- making the call page feel like a developer console
+- card overload
+- dashboard grids everywhere
+- loud gradients for no reason
+- cluttered feature marketing
+- making the homepage feel like a technical demo checklist
 
 ## Product Copy Rules
 
@@ -85,13 +80,11 @@ Avoid:
 
 ## Integration Rules
 
-Use the existing helpers in `lib/api.ts`.
+The active frontend calls backend endpoints directly from `frontend/static/app.js`.
 
-Do not scatter raw fetch logic across components unless there is a strong reason.
+Do not invent new response shapes in the frontend.
 
-Use the existing types in `lib/types.ts`.
-
-If a backend field is unclear, ask the backend owner before changing the type locally.
+If an API field is unclear, resolve it in the backend contract rather than patching around it cosmetically.
 
 ## Error Handling Rules
 
@@ -104,7 +97,7 @@ The UI should handle:
 - missing result data
 - sandbox call fallback or call error states
 
-The UI should explain the issue in plain language, not dump raw JSON unless nothing else is available.
+The UI should explain the issue in plain language.
 
 ## Loading Rules
 
@@ -116,23 +109,23 @@ Always provide a useful loading state for:
 - transcript loading
 - result loading
 
-Do not leave empty white states while requests are in flight.
+Do not leave blank white states while requests are in flight.
 
 ## Safe Refactor Rules
 
 Safe:
 
-- split large components
-- create shared presentational components
-- improve semantic HTML
-- improve accessibility
-- improve spacing, motion, and typography
+- restructuring the HTML
+- simplifying sections
+- improving semantic markup
+- improving accessibility
+- tightening spacing, motion, and typography
 
 Unsafe without backend coordination:
 
-- renaming fields from the API
-- assuming new status values
-- changing event stream payload handling
+- changing endpoint assumptions
+- changing event payload assumptions
+- changing negotiation status expectations
 
 ## Visual Emphasis
 
@@ -146,28 +139,22 @@ If the frontend has to prioritize, make those three moments excellent first.
 
 ## Local Run
 
-Run frontend:
+Run backend:
 
 ```bash
-npm run dev
-```
-
-Run backend separately:
-
-```bash
-npm run dev:api
+.venv/bin/python -m uvicorn backend.app.main:app --reload --port 8000
 ```
 
 Open:
 
 ```text
-http://127.0.0.1:3000
+http://127.0.0.1:8000
 ```
 
 ## Required Checks Before Shipping Frontend Changes
 
 ```bash
-npm run build
+node --check frontend/static/app.js
 ```
 
 Then manually verify:
@@ -182,7 +169,7 @@ Then manually verify:
 
 If you are the frontend owner:
 
-- make it look strong
-- make it read clearly
+- make it feel like a real product
+- remove unnecessary visual noise
 - do not rewrite backend behavior
 - keep RateDrop branding intact

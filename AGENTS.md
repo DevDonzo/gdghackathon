@@ -19,7 +19,8 @@ RateDrop is a hackathon MVP that:
 
 ## Current Architecture
 
-- Frontend: Next.js 15 in the repo root
+- Frontend: static HTML, CSS, and JS in `frontend/static/`
+- Legacy frontend reference: prior Next.js code in `frontend/next-legacy/`
 - Backend: FastAPI in `backend/app/`
 - Database: MongoDB Atlas
 - Model: Gemini 2.5 Flash
@@ -27,9 +28,8 @@ RateDrop is a hackathon MVP that:
 
 ## Repo Layout
 
-- `app/`: Next.js routes
-- `components/`: frontend UI components
-- `lib/`: frontend API client and types
+- `frontend/static/`: active product frontend served by FastAPI
+- `frontend/next-legacy/`: archived Next.js implementation and component reference
 - `backend/app/main.py`: FastAPI routes
 - `backend/app/services/extraction.py`: Gemini extraction and demo fixtures
 - `backend/app/services/negotiation.py`: deterministic negotiation engine
@@ -94,8 +94,8 @@ Frontend should consume the existing API and type contracts rather than inventin
 
 Primary frontend contract files:
 
-- `lib/api.ts`
-- `lib/types.ts`
+- `frontend/static/app.js`
+- `frontend/static/styles.css`
 
 If these change, update the frontend and backend together.
 
@@ -104,26 +104,23 @@ If these change, update the frontend and backend together.
 Install:
 
 ```bash
-npm install
 python3 -m pip install -r backend/requirements.txt
 ```
 
 Run backend:
 
 ```bash
-npm run dev:api
+.venv/bin/python -m uvicorn backend.app.main:app --reload --port 8000
 ```
 
 Run frontend:
 
-```bash
-npm run dev
-```
+The active frontend is served by FastAPI from `frontend/static/`.
 
 Open:
 
 ```text
-http://127.0.0.1:3000
+http://127.0.0.1:8000
 ```
 
 ## Environment Variables
@@ -154,7 +151,6 @@ Behavior notes:
 
 The code is in good hackathon-demo shape, but there are still operational dependencies:
 
-- local frontend process must stay running
 - local backend process must stay running
 - public callback tunnel must stay alive for real Twilio callbacks
 - verified Twilio destination must be reachable
@@ -165,7 +161,7 @@ Do not describe the system as production-grade.
 
 Verified in this repo:
 
-- frontend builds cleanly
+- frontend static shell loads cleanly
 - backend compiles cleanly
 - invalid IDs return `400`
 - malformed negotiation create payload returns `400`
@@ -179,15 +175,14 @@ Verified in this repo:
 Safe changes:
 
 - CSS and layout
-- page composition
-- component refactors that preserve behavior
+- page composition in `frontend/static/index.html`
+- interaction logic in `frontend/static/app.js`
 - copy improvements that keep RateDrop branding
 - better client-side loading and error handling
 
 Risky changes:
 
-- changing `lib/types.ts`
-- changing `lib/api.ts` request/response assumptions
+- changing request or response assumptions in `frontend/static/app.js`
 - changing Mongo document shapes
 - changing negotiation math
 - changing SSE payloads
@@ -205,7 +200,7 @@ python3 scripts/backend_sanity.py
 For frontend changes:
 
 ```bash
-npm run build
+node --check frontend/static/app.js
 ```
 
 For end-to-end checks:

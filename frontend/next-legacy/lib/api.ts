@@ -44,11 +44,11 @@ export async function createDemoBill(scenarioId: string): Promise<BillSummary> {
   return handle<BillSummary>(response);
 }
 
-export async function createNegotiation(billId: string): Promise<Negotiation> {
+export async function createNegotiation(billId: string, customAngles: string[] = []): Promise<Negotiation> {
   const response = await fetch(`${API_BASE}/api/negotiations`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ billId })
+    body: JSON.stringify({ billId, customAngles })
   });
   return handle<Negotiation>(response);
 }

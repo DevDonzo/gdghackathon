@@ -4,35 +4,34 @@ RateDrop is a standalone hackathon MVP for telecom bill negotiation.
 
 The product flow is:
 
-1. Upload a telecom bill PDF or image, or load a built-in demo bill.
-2. Extract provider, monthly total, line items, and negotiation angles.
-3. Review the bill summary in the Next.js frontend.
-4. Start a controlled Twilio sandbox call.
-5. Watch the transcript update live.
-6. Land on a deterministic savings result page.
+1. Upload a telecom bill PDF or image, or load a built-in demo bill
+2. Extract provider, monthly total, line items, and negotiation angles
+3. Review the bill summary in the frontend
+4. Start a controlled Twilio sandbox call
+5. Watch the transcript update live
+6. Land on a deterministic savings result page
+
+## Repo Structure
+
+- [`frontend/static/`](/Users/hparacha/Projects/gdghackathon/frontend/static): active frontend, written in plain HTML, CSS, and JavaScript
+- [`frontend/next-legacy/`](/Users/hparacha/Projects/gdghackathon/frontend/next-legacy): archived Next.js implementation kept only as a reference
+- [`backend/`](/Users/hparacha/Projects/gdghackathon/backend): FastAPI backend, MongoDB integration, Gemini extraction, negotiation engine, and Twilio flow
+- [`scripts/`](/Users/hparacha/Projects/gdghackathon/scripts): smoke and backend sanity checks
 
 ## Stack
 
-- Next.js 15 frontend in the repo root
-- FastAPI backend in [`backend/`](/Users/hparacha/Projects/gdghackathon/backend)
-- MongoDB Atlas for bills, negotiations, and transcript turns
-- Gemini 2.5 Flash for bill extraction and line phrasing
-- Twilio Programmable Voice for the sandbox call
-- Deterministic negotiation policy and deterministic savings math
-
-## Repo Layout
-
-- [`app/`](/Users/hparacha/Projects/gdghackathon/app): Next.js routes
-- [`components/`](/Users/hparacha/Projects/gdghackathon/components): upload, live call, and result UI
-- [`lib/`](/Users/hparacha/Projects/gdghackathon/lib): frontend API client and shared types
-- [`backend/app/`](/Users/hparacha/Projects/gdghackathon/backend/app): FastAPI app, Mongo access, extraction, negotiation engine, Twilio hooks
-- [`plan.md`](/Users/hparacha/Projects/gdghackathon/plan.md): product plan used for this build
+- Frontend: static HTML, CSS, and JavaScript
+- Backend: FastAPI
+- Database: MongoDB Atlas
+- Model: Gemini 2.5 Flash
+- Voice: Twilio Programmable Voice
+- Logic: deterministic negotiation policy and deterministic savings math
 
 ## Environment
 
-The backend reads the root `.env.local` directly. The frontend reads the root `.env.local` through Next.js.
+The backend reads the root `.env.local`.
 
-Existing required vars already match the app:
+Required:
 
 - `MONGODB_URI`
 - `GEMINI_API_KEY`
@@ -40,26 +39,21 @@ Existing required vars already match the app:
 - `TWILIO_ACCOUNT_SID`
 - `TWILIO_AUTH_TOKEN`
 - `TWILIO_PHONE_NUMBER`
+
+Important optional values:
+
 - `TWILIO_VERIFY_ORIG_NUMBERS`
-
-Additional optional vars for a real Twilio sandbox run:
-
 - `TWILIO_SANDBOX_TO_NUMBER`
 - `PUBLIC_BASE_URL`
 - `FRONTEND_BASE_URL`
-- `NEXT_PUBLIC_API_BASE_URL`
 
-If `PUBLIC_BASE_URL` is missing, the app still runs the deterministic negotiation and transcript flow, but the Twilio call stays in simulated mode because Twilio cannot reach a localhost webhook.
+Behavior notes:
+
+- If `PUBLIC_BASE_URL` is missing, the backend falls back to simulated call mode
+- Twilio trial mode requires verified destination numbers
+- If Atlas is unreachable, the static shell still loads, but API-backed flows that need persistence will fail until MongoDB is reachable
 
 ## Install
-
-### Frontend
-
-```bash
-npm install
-```
-
-### Backend
 
 ```bash
 python3 -m pip install -r backend/requirements.txt
@@ -67,25 +61,29 @@ python3 -m pip install -r backend/requirements.txt
 
 ## Run
 
-Start the API:
+Start the backend:
 
 ```bash
-npm run dev:api
+.venv/bin/python -m uvicorn backend.app.main:app --reload --port 8000
 ```
 
-Start the frontend in a second terminal:
+Open:
 
-```bash
-npm run dev
+```text
+http://127.0.0.1:8000
 ```
 
-Then open `http://127.0.0.1:3000`.
+The active frontend is served directly by FastAPI from `frontend/static/`.
 
-Optional smoke check once the API is running:
+## Frontend Notes
 
-```bash
-python3 scripts/smoke_mvp.py
-```
+If you are only working on the UI, focus on:
+
+- [`frontend/static/index.html`](/Users/hparacha/Projects/gdghackathon/frontend/static/index.html)
+- [`frontend/static/styles.css`](/Users/hparacha/Projects/gdghackathon/frontend/static/styles.css)
+- [`frontend/static/app.js`](/Users/hparacha/Projects/gdghackathon/frontend/static/app.js)
+
+The old Next.js code in [`frontend/next-legacy/`](/Users/hparacha/Projects/gdghackathon/frontend/next-legacy) is not the active app path.
 
 ## API Surface
 
@@ -93,6 +91,7 @@ python3 scripts/smoke_mvp.py
 - `GET /api/demo-bills`
 - `POST /api/bills/demo/{scenarioId}`
 - `GET /api/bills/{id}`
+- `GET /api/negotiations?limit=N`
 - `POST /api/negotiations`
 - `POST /api/negotiations/{id}/start`
 - `GET /api/negotiations/{id}`
@@ -101,34 +100,29 @@ python3 scripts/smoke_mvp.py
 - `POST /twilio/voice/negotiations/{id}`
 - `POST /twilio/status/{id}`
 
-## How The MVP Works
+## Validation
 
-### Bill extraction
+Backend compile:
 
-The upload endpoint accepts a PDF or image, sends it to Gemini, and stores a strict structured summary in MongoDB. If Gemini is unavailable, the backend falls back to a demo extraction template so the UI still works.
+```bash
+python3 -m py_compile backend/app/main.py backend/app/services/negotiation.py backend/app/services/twilio_voice.py backend/app/db/mongo.py backend/app/models/schemas.py
+```
 
-### Negotiation engine
+Frontend syntax:
 
-Negotiation logic is not improvised by the model.
+```bash
+node --check frontend/static/app.js
+```
 
-- The backend picks a deterministic scenario: `happy_path`, `escalation_path`, or `fee_recovery_path`.
-- The policy engine sets the intent, objective, and numeric offer ladder.
-- Gemini is only used to phrase the already-decided turns.
-- Savings math is always computed in code from the structured offer values.
+End-to-end smoke:
 
-### Twilio sandbox
-
-When a negotiation starts, the backend tries to place an outbound call from `TWILIO_PHONE_NUMBER` to `TWILIO_SANDBOX_TO_NUMBER` or the first verified number in `TWILIO_VERIFY_ORIG_NUMBERS`.
-
-The Twilio voice webhook reads out the scripted negotiation line by line so the sandbox number receives a controlled live demo while the frontend streams the same negotiation transcript.
-
-## Demo Notes
-
-- The UI is branded only as RateDrop.
-- The call side is explicitly sandboxed and consumer-product oriented.
+```bash
+python3 scripts/smoke_mvp.py
+```
 
 ## Known Limits
 
-- A public API URL is required for Twilio to hit the voice/status webhooks.
-- The current Twilio flow is a narrated sandbox call, not a full duplex speech loop.
-- Gemini failures fall back to a canned extraction/phrasing path so the demo remains stable.
+- A public API URL is still required for Twilio to hit the voice and status webhooks
+- The current Twilio flow is a narrated sandbox call, not a full duplex speech loop
+- Trial-account call reliability still depends on verified destination numbers
+- This is a hackathon MVP, not a production-grade deployment

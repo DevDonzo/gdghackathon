@@ -47,6 +47,7 @@ class BillUploadResponse(BaseModel):
 
 class NegotiationCreateRequest(BaseModel):
     billId: str
+    customAngles: list[str] = Field(default_factory=list)
 
 
 class CallMetadata(BaseModel):

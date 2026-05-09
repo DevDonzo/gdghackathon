@@ -29,6 +29,9 @@ def resolve_public_base_url(request: Request) -> str | None:
 
 def launch_sandbox_call(negotiation_id: str, request: Request) -> dict[str, Any]:
     settings = get_settings()
+    if settings.force_simulated_calls or request.headers.get("x-ratedrop-simulated-call") == "1":
+        return {"status": "simulated", "mode": "simulated", "error": "Twilio launch skipped by simulated-call guard."}
+
     if not settings.twilio_enabled:
         return {"status": "simulated", "mode": "simulated", "error": "Twilio credentials are not configured."}
 
@@ -75,6 +78,36 @@ def launch_sandbox_call(negotiation_id: str, request: Request) -> dict[str, Any]
             "mode": "simulated",
             "error": f"Twilio launch failed, so RateDrop switched to simulated mode: {error}",
         }
+
+
+def twilio_readiness(request: Request | None = None) -> dict[str, Any]:
+    settings = get_settings()
+    public_base_url = resolve_public_base_url(request) if request else settings.public_base_url
+    verified_numbers = settings.twilio_verified_numbers
+    destination = settings.twilio_sandbox_to_number or (verified_numbers[0] if verified_numbers else None)
+    missing = []
+
+    if not settings.twilio_account_sid:
+        missing.append("TWILIO_ACCOUNT_SID")
+    if not settings.twilio_auth_token:
+        missing.append("TWILIO_AUTH_TOKEN")
+    if not settings.twilio_phone_number:
+        missing.append("TWILIO_PHONE_NUMBER")
+    if not destination:
+        missing.append("TWILIO_SANDBOX_TO_NUMBER or TWILIO_VERIFY_ORIG_NUMBERS")
+    if not public_base_url:
+        missing.append("PUBLIC_BASE_URL")
+
+    return {
+        "enabled": settings.twilio_enabled,
+        "mode": "simulated" if settings.force_simulated_calls else "sandbox" if not missing else "simulated",
+        "trialCompatible": bool(settings.twilio_enabled and destination),
+        "forceSimulatedCalls": settings.force_simulated_calls,
+        "destination": destination,
+        "publicBaseUrl": public_base_url,
+        "missing": missing,
+        "note": "A free Twilio trial can place sandbox calls only to verified destination numbers.",
+    }
 
 
 def negotiation_twiml(negotiation: dict[str, Any], request: Request, step: int) -> str:
