@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
 from typing import Any, Iterable
@@ -26,7 +27,7 @@ class MemoryCursor:
             sort_keys = [(key_or_list, direction or 1)]
 
         for key, sort_direction in reversed(sort_keys):
-            self._documents.sort(key=lambda item: _field_value(item, key), reverse=sort_direction < 0)
+            self._documents.sort(key=lambda item: _sort_value(_field_value(item, key)), reverse=sort_direction < 0)
         return self
 
     def limit(self, count: int) -> "MemoryCursor":
@@ -139,6 +140,13 @@ def _field_value(document: dict[str, Any], key: str) -> Any:
         if not isinstance(value, dict):
             return None
         value = value.get(part)
+    return value
+
+
+def _sort_value(value: Any) -> Any:
+    if isinstance(value, datetime):
+        normalized = value if value.tzinfo else value.replace(tzinfo=UTC)
+        return normalized.timestamp()
     return value
 
 

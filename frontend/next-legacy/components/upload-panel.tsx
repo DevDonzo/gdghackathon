@@ -41,18 +41,40 @@ export function UploadPanel() {
 
   useEffect(() => {
     async function loadHomeData() {
-      try {
-        const [items, history] = await Promise.all([fetchDemoBills(), fetchRecentNegotiations()]);
-        setDemoBills(items);
-        setRecentNegotiations(history);
-      } catch {
+      const [demoResult, historyResult] = await Promise.allSettled([fetchDemoBills(), fetchRecentNegotiations()]);
+
+      if (demoResult.status === "fulfilled") {
+        setDemoBills(demoResult.value);
+      } else {
         setDemoBills([]);
+      }
+
+      if (historyResult.status === "fulfilled") {
+        setRecentNegotiations(historyResult.value);
+      } else {
         setRecentNegotiations([]);
       }
     }
 
     loadHomeData();
   }, []);
+
+  async function refreshRecentNegotiations() {
+    try {
+      setRecentNegotiations(await fetchRecentNegotiations());
+    } catch {
+      setRecentNegotiations([]);
+    }
+  }
+
+  async function refreshDemoBills() {
+    try {
+      const items = await fetchDemoBills();
+      setDemoBills(items);
+    } catch {
+      setDemoBills([]);
+    }
+  }
 
   async function handleUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -71,7 +93,7 @@ export function UploadPanel() {
       if (!companyName) {
         setCompanyName(extracted.provider);
       }
-      setRecentNegotiations(await fetchRecentNegotiations());
+      await refreshRecentNegotiations();
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "Upload failed.");
     } finally {
@@ -118,7 +140,8 @@ export function UploadPanel() {
       setCompanyName(extracted.provider);
       setCustomAngles([]);
       setCustomInput("");
-      setRecentNegotiations(await fetchRecentNegotiations());
+      await refreshRecentNegotiations();
+      await refreshDemoBills();
     } catch (demoError) {
       setError(demoError instanceof Error ? demoError.message : "Could not load demo bill.");
     } finally {
