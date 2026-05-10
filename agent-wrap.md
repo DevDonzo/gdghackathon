@@ -26,8 +26,9 @@ Strands is the right choice for this project for four reasons:
 
 2. **Bedrock-native while still agentic.** Strands has a first-party Bedrock model provider, so it
    can drive Amazon Nova through the AWS CLI/account credentials already configured for the demo.
-   The default primary model is `amazon.nova-micro-v1:0`, with `amazon.nova-lite-v1:0` as the
-   automatic fallback if Micro fails a tool-use turn.
+   The default primary model is `amazon.nova-lite-v1:0`, which is still very cheap and handled
+   Strands tool calls more reliably in testing. `amazon.nova-micro-v1:0` remains configurable as
+   the lowest-cost option.
 
 3. **Apache 2.0, no usage fees.** Correct for a hackathon.
 
@@ -346,8 +347,8 @@ Add one field to the `Settings` class:
 ```python
 agent_mode: str = Field(default="strands", alias="RATEDROP_AGENT_MODE")
 agent_model_provider: str = Field(default="bedrock", alias="RATEDROP_AGENT_MODEL_PROVIDER")
-agent_model_id: str = Field(default="amazon.nova-micro-v1:0", alias="RATEDROP_AGENT_MODEL_ID")
-agent_fallback_model_id: str = Field(default="amazon.nova-lite-v1:0", alias="RATEDROP_AGENT_FALLBACK_MODEL_ID")
+agent_model_id: str = Field(default="amazon.nova-lite-v1:0", alias="RATEDROP_AGENT_MODEL_ID")
+agent_fallback_model_id: str = Field(default="amazon.nova-micro-v1:0", alias="RATEDROP_AGENT_FALLBACK_MODEL_ID")
 agent_aws_region: str = Field(default="us-east-1", alias="RATEDROP_AGENT_AWS_REGION")
 # Values: "disabled" (use deterministic engine), "strands" (use agent)
 ```
@@ -368,8 +369,8 @@ Both are pip-installable, Apache 2.0, no usage fees.
 |---|---|---|---|
 | `RATEDROP_AGENT_MODE` | `strands`, `disabled` | `strands` | Uses Strands agent phrasing for live calls |
 | `RATEDROP_AGENT_MODEL_PROVIDER` | `bedrock`, `gemini` | `bedrock` | Chooses the Strands model provider |
-| `RATEDROP_AGENT_MODEL_ID` | Bedrock model ID | `amazon.nova-micro-v1:0` | Primary cheapest Nova text model |
-| `RATEDROP_AGENT_FALLBACK_MODEL_ID` | Bedrock model ID | `amazon.nova-lite-v1:0` | Automatic retry model if Nova Micro fails a tool-use turn |
+| `RATEDROP_AGENT_MODEL_ID` | Bedrock model ID | `amazon.nova-lite-v1:0` | Primary reliable cheap Nova text model |
+| `RATEDROP_AGENT_FALLBACK_MODEL_ID` | Bedrock model ID | `amazon.nova-micro-v1:0` | Lowest-cost fallback/override option |
 | `RATEDROP_AGENT_AWS_REGION` | AWS region | `us-east-1` | Bedrock runtime region for Nova Micro |
 | `GEMINI_API_KEY` | string | optional for agent | Only used if `RATEDROP_AGENT_MODEL_PROVIDER=gemini` |
 

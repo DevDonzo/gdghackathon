@@ -110,8 +110,8 @@ def test_default_agent_mode_is_strands() -> None:
 def test_default_agent_model_is_bedrock_nova_micro() -> None:
     settings = get_settings()
     assert settings.normalized_agent_model_provider == "bedrock"
-    assert settings.agent_model_id == "amazon.nova-micro-v1:0"
-    assert settings.agent_fallback_model_id == "amazon.nova-lite-v1:0"
+    assert settings.agent_model_id == "amazon.nova-lite-v1:0"
+    assert settings.agent_fallback_model_id == "amazon.nova-micro-v1:0"
     assert settings.agent_aws_region == "us-east-1"
 
 
@@ -124,12 +124,12 @@ def test_make_model_can_build_bedrock_model() -> None:
     finally:
         settings.agent_model_provider = original_provider
 
-    assert model.config["model_id"] == "amazon.nova-micro-v1:0"
+    assert model.config["model_id"] == "amazon.nova-lite-v1:0"
 
 
 def test_make_model_can_build_bedrock_fallback_model() -> None:
-    model = _make_model(bedrock_model_id="amazon.nova-lite-v1:0")
-    assert model.config["model_id"] == "amazon.nova-lite-v1:0"
+    model = _make_model(bedrock_model_id="amazon.nova-micro-v1:0")
+    assert model.config["model_id"] == "amazon.nova-micro-v1:0"
 
 
 def test_telecom_agent_text_rejects_unauthorized_money() -> None:
@@ -146,6 +146,23 @@ def test_telecom_agent_text_rejects_unauthorized_money() -> None:
         telecom_negotiation(),
     )
     assert unauthorized == ["60"]
+
+
+def test_counter_to_target_rejects_walkaway_counter() -> None:
+    decision = {
+        "action": "counter_to_target",
+        "proposedMonthly": 70.0,
+        "bestOfferMonthly": 70.0,
+        "bestCredit": 0.0,
+        "credit": None,
+        "finalMonthly": 85.0,
+    }
+    unauthorized = _unauthorized_money_values(
+        "Can we do $63 per month?",
+        decision,
+        telecom_negotiation(),
+    )
+    assert unauthorized == ["63"]
 
 
 def test_agent_result_text_cleanup_removes_thinking() -> None:
@@ -165,5 +182,6 @@ if __name__ == "__main__":
     test_make_model_can_build_bedrock_model()
     test_make_model_can_build_bedrock_fallback_model()
     test_telecom_agent_text_rejects_unauthorized_money()
+    test_counter_to_target_rejects_walkaway_counter()
     test_agent_result_text_cleanup_removes_thinking()
     print("agent wrap tests passed")

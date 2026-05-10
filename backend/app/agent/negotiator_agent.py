@@ -251,16 +251,7 @@ def _unauthorized_money_values(text: str, decision: dict[str, Any], negotiation:
     if issue_context and issue_context.get("taskType") != "telecom_negotiation":
         return []
 
-    allowed_values = {
-        _money_key(negotiation.get("currentMonthly")),
-        _money_key(negotiation.get("targetMonthly")),
-        _money_key(negotiation.get("walkAwayMonthly")),
-        _money_key(decision.get("proposedMonthly")),
-        _money_key(decision.get("bestOfferMonthly")),
-        _money_key(decision.get("bestCredit")),
-        _money_key(decision.get("credit")),
-        _money_key(decision.get("finalMonthly")),
-    }
+    allowed_values = _allowed_money_values_for_action(decision, negotiation)
     allowed_values.discard(None)
 
     unauthorized = []
@@ -283,3 +274,27 @@ def _money_key(value: Any) -> str | None:
         return f"{float(value):.2f}"
     except (TypeError, ValueError):
         return None
+
+
+def _allowed_money_values_for_action(decision: dict[str, Any], negotiation: dict[str, Any]) -> set[str | None]:
+    current = _money_key(negotiation.get("currentMonthly"))
+    target = _money_key(negotiation.get("targetMonthly"))
+    walkaway = _money_key(negotiation.get("walkAwayMonthly"))
+    proposed = _money_key(decision.get("proposedMonthly"))
+    best_offer = _money_key(decision.get("bestOfferMonthly"))
+    credit = _money_key(decision.get("credit"))
+    best_credit = _money_key(decision.get("bestCredit"))
+    final = _money_key(decision.get("finalMonthly"))
+
+    action = str(decision.get("action") or "")
+    if action == "counter_to_target":
+        return {current, target, proposed, best_offer}
+    if action == "ask_for_credit_plus_rate_relief":
+        return {current, target, credit, best_credit}
+    if action == "accept_offer":
+        return {proposed, best_offer, credit, best_credit, final}
+    if action == "exit_without_accepting":
+        return {current, walkaway, best_offer, proposed}
+    if action == "push_for_retention":
+        return {current, target}
+    return {current, target, walkaway, proposed, best_offer, credit, best_credit, final}
