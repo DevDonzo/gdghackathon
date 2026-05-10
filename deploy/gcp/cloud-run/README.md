@@ -17,7 +17,8 @@ The script:
 - Builds the app container with Cloud Build
 - Uploads local `.env.local` secret values to Secret Manager without printing them
 - Deploys one Cloud Run service with nginx, FastAPI, and Next.js in the same container
-- Sets `PUBLIC_BASE_URL`, `FRONTEND_BASE_URL`, and the ConversationRelay `wss://` base after Cloud Run returns the service URL
+- Sets `PUBLIC_BASE_URL`, `FRONTEND_BASE_URL`, and the ConversationRelay `wss://.../ws/conversation-relay` base after Cloud Run returns the service URL
+- Runs the judged demo in `conversation_relay` mode so Twilio can connect phone speech to the Cloud Run WebSocket agent loop
 
 ## Demo Cost Controls
 

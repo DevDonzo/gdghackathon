@@ -60,13 +60,13 @@ gcloud run deploy "$SERVICE_NAME" \
   --timeout 3600 \
   --no-cpu-throttling \
   --session-affinity \
-  --set-env-vars "NODE_ENV=production,RATEDROP_DATABASE_MODE=local,RATEDROP_LOCAL_DB_PATH=/tmp/ratedrop/local-db,RATEDROP_AGENT_MODE=adk,RATEDROP_AGENT_MODEL_PROVIDER=gemini,RATEDROP_TWILIO_MODE=sandbox_tts,NEXT_PUBLIC_API_BASE_URL=" \
+  --set-env-vars "NODE_ENV=production,RATEDROP_DATABASE_MODE=local,RATEDROP_LOCAL_DB_PATH=/tmp/ratedrop/local-db,RATEDROP_AGENT_MODE=adk,RATEDROP_AGENT_MODEL_PROVIDER=gemini,RATEDROP_TWILIO_MODE=conversation_relay,NEXT_PUBLIC_API_BASE_URL=" \
   --set-secrets "GEMINI_API_KEY=ratedrop-gemini-api-key:latest,TAVILY_API_KEY=ratedrop-tavily-api-key:latest,TWILIO_ACCOUNT_SID=ratedrop-twilio-account-sid:latest,TWILIO_AUTH_TOKEN=ratedrop-twilio-auth-token:latest,TWILIO_PHONE_NUMBER=ratedrop-twilio-phone-number:latest,TWILIO_SANDBOX_TO_NUMBER=ratedrop-twilio-sandbox-to-number:latest,TWILIO_VERIFY_ORIG_NUMBERS=ratedrop-twilio-verify-orig-numbers:latest"
 
 SERVICE_URL="$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)')"
 
 gcloud run services update "$SERVICE_NAME" \
   --region "$REGION" \
-  --update-env-vars "PUBLIC_BASE_URL=${SERVICE_URL},FRONTEND_BASE_URL=${SERVICE_URL},RATEDROP_CONVERSATION_RELAY_WS_BASE=${SERVICE_URL/https:/wss:}"
+  --update-env-vars "PUBLIC_BASE_URL=${SERVICE_URL},FRONTEND_BASE_URL=${SERVICE_URL},RATEDROP_CONVERSATION_RELAY_WS_BASE=${SERVICE_URL/https:/wss:}/ws/conversation-relay"
 
 echo "$SERVICE_URL"
