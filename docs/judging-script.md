@@ -2,24 +2,29 @@
 
 Target length: 4 to 5 minutes.
 
-Roles:
+Person A: Hamza. Runs the live demo, answers the phone as the Rogers rep, shows the result, and explains the Google Cloud track.
 
-- Person A: product demo operator and cloud architecture explanation.
-- Person B: problem framing, technical framing, transitions, and closing.
+Person B: Opens the pitch, explains the guardrails, narrates the agent behavior, and closes.
 
-## 0:00-0:30 Opening
+## 0:00-0:35 Opening
 
 Person B:
 
-"Companies already use AI to route, delay, and reduce the cost of dealing with customers. RateDrop gives consumers an agent back.
+```text
+Companies already use AI to make support cheaper for themselves. They route you through phone trees, keep you on hold, and make you repeat the same account details.
 
-Instead of sitting on hold and negotiating a bill yourself, you upload the evidence, define the exact outcome you want, and RateDrop calls on your behalf. It keeps the conversation bounded by policy, streams the transcript, and shows the final savings proof."
+RateDrop gives consumers an agent back. You give it evidence, a goal, constraints, and completion proof. It calls support, waits on the line, pushes for the fix, and comes back with a transcript and outcome.
+```
 
 Person A:
 
-"For the demo, we are not calling a real telecom company. We are using a controlled Twilio trial call to our verified number, where I will act as the company representative. The important part is that the same cloud runtime, agent loop, transcript stream, and policy engine are live."
+```text
+For safety, we are not calling Rogers during judging. We are making a real Twilio call to our verified demo number, and I will act as the Rogers representative.
 
-## 0:30-1:15 Product Demo Setup
+This one controlled call shows both things RateDrop can do: negotiate the monthly price and get a bad charge credited.
+```
+
+## 0:35-1:15 Demo Setup
 
 Person A:
 
@@ -29,66 +34,99 @@ Open:
 https://ratedrop-reezumnw5a-uc.a.run.app
 ```
 
-Click `Start`, continue with the demo account, and load the Bell demo.
+Click `Start`, sign in, then click:
+
+```text
+Rogers demo
+```
 
 Say:
 
-"I am starting from a bill. RateDrop extracts the company, plan, monthly total, fees, and negotiation angles. But the agent does not just guess what to do. The user has to define the mission."
+```text
+This preloads a Rogers bill at $91.50/month with a disputed $35 roaming fee.
 
-Fill example mission:
-
-- Company: `Bell`
-- Problem: `The monthly bill increased after the promotional rate ended.`
-- Desired outcome: `Lower the monthly bill and confirm when the new rate takes effect.`
-- Target monthly: `52`
-- Walk-away max: `58`
-- Known fact: `Current bill is $85 on Unlimited 50.`
-- Constraint: `Do not accept a vague callback.`
-- Completion proof: `Rep confirms the monthly rate and effective date.`
+The mission is specific: lower the recurring bill to $55, apply the $35 credit, and do not close until the rep confirms the rate, credit, effective date, and account notes.
+```
 
 Person B:
 
-"This is important: RateDrop is not a generic chatbot. The user supplies the goal and constraints, and the backend turns that into a bounded phone mission."
+```text
+This is not a generic chatbot. The user defines facts, constraints, and completion proof. Gemini can make responses sound natural, but backend policy controls the money, the credit, and when the call can end.
+```
 
-## 1:15-2:20 Live Call Demo
-
-Person A:
-
-Click `Start voice agent`.
-
-When the phone rings, answer it. Person A acts as the company support representative.
-
-Suggested rep script:
-
-1. "Thanks for calling Bell, how can I help?"
-2. "I see the account, but the current plan is already the standard rate."
-3. "I can reduce it to seventy dollars a month."
-4. "Let me check retention. I can do fifty-two dollars a month."
-5. "Confirmed. The new monthly rate is fifty-two dollars and it starts next billing cycle."
-
-Person A, while demo runs:
-
-"The call is live. The transcript is streaming back into the UI. The reasoning panel shows why the agent is making each move, for example whether it is countering because the offer is above the walk-away threshold or accepting because the offer is within bounds."
-
-Person B:
-
-"The agent can phrase responses with Gemini, but the money decisions are deterministic. That means the model is not allowed to invent savings, accept random numbers, or change the math."
-
-## 2:20-3:10 Result Page
+## 1:15-2:45 Live Call
 
 Person A:
 
-After completion, show the result page.
+Click:
+
+```text
+Start voice agent
+```
+
+Answer the phone and act as Rogers.
+
+Person A as rep:
+
+```text
+Thanks for calling Rogers, how can I help?
+```
+
+Person A as rep:
+
+```text
+I do not see any promotions available.
+```
+
+Person A as rep:
+
+```text
+I can apply a 35 dollar credit for the roaming fee, but the monthly plan would stay the same.
+```
+
+Person A as rep:
+
+```text
+I can reduce it to 70 dollars a month and keep the 35 dollar credit.
+```
+
+Person A as rep:
+
+```text
+I can get approval for 55 dollars a month and a 35 dollar credit.
+```
+
+Person A as rep:
+
+```text
+Confirmed, the new monthly rate is 55 dollars, the 35 dollar credit is applied, it starts next billing cycle, and it is noted on the account.
+```
+
+Person B while transcript is visible:
+
+```text
+Watch the reasoning panel. The agent does not accept a vague no, does not accept only the credit, counters the weak $70 offer, and only closes after proof is confirmed.
+```
+
+## 2:45-3:20 Result And Proof
+
+Person A:
+
+Show the result page and proof email panel.
 
 Say:
 
-"The result page gives a deterministic before-and-after number, transcript summary, monthly savings, annualized savings, and any credit captured. This is the proof layer. It turns a messy phone call into a measurable outcome."
+```text
+This is the proof layer. RateDrop turns a messy phone call into a structured outcome: the starting bill, the new monthly rate, the credit, the transcript, and the confirmation.
+```
 
 Person B:
 
-"That is the product loop: evidence in, bounded agent call, transcript out, savings proof at the end."
+```text
+That is the loop: evidence in, mission defined, phone agent handles the call, and the user gets proof.
+```
 
-## 3:10-4:20 Cloud Architecture
+## 3:20-4:30 Cloud Track Explanation
 
 Person A:
 
@@ -100,42 +138,38 @@ https://ratedrop-reezumnw5a-uc.a.run.app/api/readiness
 
 Say:
 
-"This is deployed on Google Cloud Run, and this endpoint proves what is live.
+```text
+We are going for Best Use of Cloud Technologies because the cloud is the runtime for the phone agent, not just static hosting.
 
-Cloud Run is our real-time phone-agent control plane. It serves the Next.js frontend, FastAPI backend, Twilio webhooks, SSE transcript stream, and the WebSocket ConversationRelay loop from one public HTTPS service.
+This is deployed on Google Cloud Run. One Cloud Run service serves the Next.js frontend, FastAPI backend, Twilio webhooks, SSE transcript events, and the WebSocket endpoint used by Twilio ConversationRelay.
+```
 
-Secret Manager stores the Gemini, Tavily, and Twilio credentials outside the codebase. Cloud Build builds the container. Artifact Registry stores the image. Cloud Run runs the app with min and max instances set to one for a reliable hackathon demo.
+Continue:
 
-The readiness endpoint shows Google ADK mode is enabled, Gemini is configured, Tavily is configured, Twilio ConversationRelay is configured, and the public WebSocket base is live."
+```text
+Twilio needs a public callback URL, the browser needs live transcript streaming, and the voice agent needs a server-side WebSocket loop. Cloud Run gives us all of that in one serverless container.
 
-Person B:
+Secret Manager stores Gemini, Tavily, Twilio, and SMTP credentials. Cloud Build builds the container, Artifact Registry stores the image, and Cloud Run deploys the live revision.
 
-"The cloud part is not just hosting. The product depends on the cloud because Twilio needs public callbacks, the browser needs live transcript streaming, and the voice agent needs a WebSocket runtime that stays alive during the call."
-
-## 4:20-4:50 Closing
-
-Person B:
-
-"RateDrop is a focused consumer agent for a real pain point: support calls where companies have more leverage than customers. It is grounded in the user's evidence, constrained by deterministic policy, and deployed as a live Google Cloud voice-agent runtime."
-
-Person A:
-
-"The future version can handle more companies, phone trees, and longer calls. But the core loop is working now: upload evidence, define a mission, launch a cloud-hosted agent, stream the call, and prove the outcome."
-
-## If A Judge Asks About Safety
-
-Person A:
-
-"For the hackathon demo, we only call our own verified Twilio number. We are not calling real companies during judging. The architecture is production-shaped, but the demo is intentionally sandboxed."
-
-## If A Judge Asks Why ADK Matters
+Google ADK wraps the agent loop. Gemini handles extraction and natural phrasing, but backend tools control money, constraints, completion proof, and when the call can close.
+```
 
 Person B:
 
-"ADK gives us an agent wrapper around tools, but the tools enforce boundaries. The model can help phrase and route the response, but the backend policy decides whether to push, counter, accept, or close. That keeps the demo credible because the final math is code-driven."
+```text
+Without a public cloud runtime, Twilio cannot reach the agent, the UI cannot stream the call, and judges would only see a local demo. Here the whole voice-agent loop is live on Google Cloud.
+```
 
-## If A Judge Asks Why Cloud Run
+## 4:30-5:00 Closing
+
+Person B:
+
+```text
+RateDrop gives consumers leverage in the support calls they avoid: telecom bills, airline refunds, bank fees, subscriptions, warranties, and billing disputes.
+```
 
 Person A:
 
-"Cloud Run supports exactly what this app needs: a public HTTPS URL, container deployment, backend APIs, long-lived SSE transcript streams, and WebSocket upgrades for Twilio ConversationRelay. It let us ship the whole voice-agent runtime as one serverless service."
+```text
+The demo is controlled, but the pattern is real: evidence, mission, phone agent, transcript, proof, and cloud deployment.
+```

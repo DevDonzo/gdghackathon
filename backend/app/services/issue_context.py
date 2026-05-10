@@ -52,8 +52,9 @@ def _classify_task(company: str, issue: str, desired: str, bill: dict[str, Any])
     text = f"{company} {issue} {desired} {bill.get('planName', '')}".lower()
     provider = str(bill.get("provider", "")).lower()
     telecom_provider = provider in {"bell", "rogers", "telus"} or company.lower() in {"bell", "rogers", "telus"}
+    rate_or_retention_goal = any(token in text for token in ["rate", "bill", "monthly", "plan", "promo", "retention", "loyalty", "lower"])
     explicit_dispute = any(token in text for token in ["dispute", "wrong charge", "incorrect charge", "unauthorized charge", "refund"])
-    if telecom_provider and not explicit_dispute:
+    if telecom_provider and (rate_or_retention_goal or not explicit_dispute):
         return "telecom_negotiation"
     if any(token in text for token in ["flight", "airline", "air canada", "booking", "baggage", "ticket", "refund"]):
         return "travel_support"

@@ -19,6 +19,7 @@ from backend.app.models.schemas import (
     CompanyLookupRequest,
     InvalidObjectIdError,
     NegotiationCreateRequest,
+    ProofEmailRequest,
     object_id,
     serialize_bill,
     serialize_negotiation,
@@ -30,6 +31,7 @@ from backend.app.services.company_lookup import lookup_company_contact
 from backend.app.services.extraction import DEMO_BILLS, demo_bill_fixture, extract_bill_data
 from backend.app.services.issue_context import build_issue_context
 from backend.app.services.negotiation import create_negotiation_document, resume_in_progress_negotiations, schedule_negotiation_run
+from backend.app.services.proof_email import build_proof_email, send_proof_email
 from backend.app.services.twilio_voice import launch_sandbox_call, negotiation_twiml, twilio_readiness, update_call_status
 
 
@@ -95,6 +97,10 @@ def readiness(request: Request) -> JSONResponse:
                 "modelId": settings.gemini_model,
             },
             "tavily": {"configured": bool(settings.tavily_api_key)},
+            "email": {
+                "proofEmailConfigured": settings.smtp_configured,
+                "defaultRecipientConfigured": bool(settings.proof_email_to),
+            },
             "twilio": twilio_readiness(request),
         }
     )
@@ -348,6 +354,34 @@ def get_transcript(negotiation_id: str) -> JSONResponse:
         for turn in collections["turns"].find({"negotiationId": negotiation["_id"]}).sort("createdAt", 1)
     ]
     return JSONResponse({"turns": turns})
+
+
+@app.post("/api/negotiations/{negotiation_id}/proof-email")
+async def proof_email(negotiation_id: str, request: Request) -> JSONResponse:
+    try:
+        payload = await request.json()
+        email_request = ProofEmailRequest.model_validate(payload)
+    except (json.JSONDecodeError, ValidationError, ValueError) as error:
+        raise HTTPException(status_code=400, detail="Invalid proof email payload.") from error
+
+    recipient = (email_request.email or settings.proof_email_to or "").strip()
+    if not recipient or "@" not in recipient:
+        raise HTTPException(status_code=400, detail="A valid email address is required.")
+
+    collections = get_collections()
+    negotiation = collections["negotiations"].find_one({"_id": object_id(negotiation_id)})
+    if not negotiation:
+        raise HTTPException(status_code=404, detail="Negotiation not found.")
+    if not negotiation.get("result"):
+        raise HTTPException(status_code=409, detail="Result is not ready yet.")
+
+    turns = list(collections["turns"].find({"negotiationId": negotiation["_id"]}).sort("createdAt", 1))
+    proof = build_proof_email(negotiation, turns)
+    try:
+        response = send_proof_email(recipient, proof)
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f"Proof email failed: {error}") from error
+    return JSONResponse(response)
 
 
 @app.get("/api/negotiations/{negotiation_id}/events")

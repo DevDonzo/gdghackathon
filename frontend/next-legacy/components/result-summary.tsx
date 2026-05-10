@@ -4,7 +4,7 @@ import confetti from "canvas-confetti";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { fetchNegotiation, money } from "@/lib/api";
+import { fetchNegotiation, money, sendProofEmail } from "@/lib/api";
 import { Negotiation } from "@/lib/types";
 import { SavingsChart } from "@/components/savings-chart";
 
@@ -17,6 +17,9 @@ export function ResultSummary({ negotiationId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [displayMonthly, setDisplayMonthly] = useState<number | null>(null);
   const [savingsVisible, setSavingsVisible] = useState(false);
+  const [proofEmail, setProofEmail] = useState("");
+  const [proofEmailStatus, setProofEmailStatus] = useState<string | null>(null);
+  const [sendingProofEmail, setSendingProofEmail] = useState(false);
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -119,6 +122,22 @@ export function ResultSummary({ negotiationId }: Props) {
   const transcriptItems = result.transcriptSummary.length
     ? result.transcriptSummary
     : ["RateDrop completed the support mission and generated the final outcome."];
+
+  async function handleProofEmail() {
+    if (!negotiation) {
+      return;
+    }
+    setSendingProofEmail(true);
+    setProofEmailStatus(null);
+    try {
+      const response = await sendProofEmail(negotiation.id, proofEmail.trim());
+      setProofEmailStatus(response.sent ? `Proof email sent to ${response.to ?? "the default recipient"}.` : response.reason ?? "Proof email generated but not sent.");
+    } catch (sendError) {
+      setProofEmailStatus(sendError instanceof Error ? sendError.message : "Could not send proof email.");
+    } finally {
+      setSendingProofEmail(false);
+    }
+  }
 
   return (
     <main className="result-page">
@@ -230,6 +249,26 @@ export function ResultSummary({ negotiationId }: Props) {
                   <strong>{callModeLabel}</strong>
                 </div>
                 <p>{callStatusLabel}</p>
+              </section>
+
+              <section className="result-panel proof-email-panel">
+                <div className="result-panel-head">
+                  <span>Email proof</span>
+                  <strong>Send receipt</strong>
+                </div>
+                <p>Send the outcome, proof trail, and transcript after the call. Leave blank to use the configured demo inbox.</p>
+                <div className="proof-email-form">
+                  <input
+                    value={proofEmail}
+                    onChange={(event) => setProofEmail(event.target.value)}
+                    placeholder="Default demo inbox or you@example.com"
+                    type="email"
+                  />
+                  <button className="primary-button" disabled={sendingProofEmail} onClick={handleProofEmail} type="button">
+                    {sendingProofEmail ? "Sending..." : "Email proof"}
+                  </button>
+                </div>
+                {proofEmailStatus ? <small>{proofEmailStatus}</small> : null}
               </section>
 
               <div className="result-actions">

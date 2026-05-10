@@ -93,9 +93,10 @@ DEMO_BILLS: dict[str, dict[str, Any]] = {
         "lineItems": [
             {"label": "Infinite Essentials plan", "amount": 76.5, "recurring": True, "category": "plan"},
             {"label": "Device balance", "amount": 15.0, "recurring": True, "category": "other"},
+            {"label": "Disputed roaming fee", "amount": 35.0, "recurring": False, "category": "fee"},
         ],
-        "negotiationAngles": ["Loyalty discount", "Competitor switch risk", "Retention review"],
-        "redFlags": ["Monthly total is above comparable market pricing"],
+        "negotiationAngles": ["Refund incorrect roaming fee", "Lower monthly plan rate", "Retention review"],
+        "redFlags": ["Monthly total is above comparable market pricing", "Disputed roaming fee needs a credit"],
         "confidence": 0.97,
     },
     "telus_fee_recovery": {

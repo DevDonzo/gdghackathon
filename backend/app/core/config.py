@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     next_public_api_base_url: str = Field(default="http://127.0.0.1:8000", alias="NEXT_PUBLIC_API_BASE_URL")
     allow_memory_db: bool = Field(default=True, alias="RATEDROP_ALLOW_MEMORY_DB")
     local_db_path: Path = Field(default=ROOT_DIR / ".ratedrop" / "local-db", alias="RATEDROP_LOCAL_DB_PATH")
+    smtp_host: str | None = Field(default=None, alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, alias="SMTP_PORT")
+    smtp_username: str | None = Field(default=None, alias="SMTP_USERNAME")
+    smtp_password: str | None = Field(default=None, alias="SMTP_PASSWORD")
+    smtp_from_email: str | None = Field(default=None, alias="SMTP_FROM_EMAIL")
+    proof_email_to: str | None = Field(default=None, alias="RATEDROP_PROOF_EMAIL_TO")
 
     @property
     def twilio_enabled(self) -> bool:
@@ -72,6 +78,10 @@ class Settings(BaseSettings):
     def normalized_agent_model_provider(self) -> str:
         provider = self.agent_model_provider.strip().lower()
         return provider if provider == "gemini" else "gemini"
+
+    @property
+    def smtp_configured(self) -> bool:
+        return bool(self.smtp_host and self.smtp_username and self.smtp_password and self.smtp_from_email)
 
 
 @lru_cache(maxsize=1)

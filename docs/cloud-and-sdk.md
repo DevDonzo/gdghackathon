@@ -16,7 +16,7 @@ Recommended hackathon deployment:
 - Model: Gemini through Google ADK
 - Secrets: Google Secret Manager
 - Storage: local JSON for the hackathon demo, or Firestore/Cloud SQL later if you want a deeper GCP-native persistence story
-- Logs/observability: CloudWatch
+- Logs/observability: Cloud Run logs through Google Cloud Logging
 - Voice: Twilio webhooks pointed at the public backend URL
 
 The important cloud requirement is that Twilio needs a public HTTPS backend URL for:
@@ -34,8 +34,26 @@ For the Google Cloud track, emphasize:
 - Google ADK is the agent runtime and Gemini is the default model
 - FastAPI exposes the public webhook surface Twilio needs
 - The agent loop is event-driven by phone conversation turns
-- CloudWatch/App Runner/ECS make every agent run observable
+- Cloud Run and Google Cloud Logging make every agent run observable
 - Secrets and phone credentials stay server-side
+- Secret Manager also supports optional SMTP credentials for proof-email delivery
+
+## Proof Email Setup
+
+RateDrop can generate proof-email content without SMTP. Actual sending requires an SMTP provider.
+
+Add these values to `.env.local`, then run the Cloud Run deploy script. The script creates matching Secret Manager secrets and attaches them to the service.
+
+```bash
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=hamza@ayafinancial.com
+SMTP_PASSWORD=your-google-app-password
+SMTP_FROM_EMAIL=hamza@ayafinancial.com
+RATEDROP_PROOF_EMAIL_TO=hamza@ayafinancial.com
+```
+
+For Gmail, use a Google App Password, not the normal account password.
 
 ## NPM Package Story
 

@@ -103,6 +103,23 @@ export async function fetchTranscript(negotiationId: string): Promise<Transcript
   return payload.turns;
 }
 
+export type ProofEmailResponse = {
+  sent: boolean;
+  to?: string;
+  reason?: string;
+  subject: string;
+  body?: string;
+};
+
+export async function sendProofEmail(negotiationId: string, email: string): Promise<ProofEmailResponse> {
+  const response = await fetch(`${API_BASE}/api/negotiations/${negotiationId}/proof-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email })
+  });
+  return handle<ProofEmailResponse>(response);
+}
+
 export function eventsUrl(negotiationId: string): string {
   return `${API_BASE}/api/negotiations/${negotiationId}/events`;
 }

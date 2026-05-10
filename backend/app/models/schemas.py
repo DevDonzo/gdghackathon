@@ -70,6 +70,10 @@ class CompanyLookupRequest(BaseModel):
     completionCriteria: list[str] = Field(default_factory=list)
 
 
+class ProofEmailRequest(BaseModel):
+    email: str | None = None
+
+
 class CallMetadata(BaseModel):
     sid: str | None = None
     to: str | None = None

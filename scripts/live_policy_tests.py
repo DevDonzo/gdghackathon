@@ -50,6 +50,17 @@ class Payload:
     completionCriteria = ["Refund is processed or rebooking is confirmed with a reference number"]
 
 
+class RogersPayload:
+    issueDescription = "The monthly bill is too high and there is a disputed $35 roaming fee that should be credited."
+    desiredOutcome = "Lower the monthly bill to $55 and apply a $35 credit for the disputed roaming fee."
+    companyName = "Rogers"
+    targetMonthly = 55
+    walkAwayMonthly = 60
+    customerFacts = ["Current Rogers bill is $91.50 on Infinite Essentials 75", "There is a disputed $35 roaming fee"]
+    constraints = ["Do not accept only a one-time credit without monthly rate relief"]
+    completionCriteria = ["Rep confirms the new monthly rate", "Rep confirms the $35 credit", "Rep confirms the effective date and account notes"]
+
+
 def drain_text_or_end(websocket) -> list[dict]:
     messages = []
     while True:
@@ -238,6 +249,53 @@ def main() -> int:
     assert_equal(support_stored["status"], "completed", "support websocket completion")
     assert_true("completed the Air Canada support request" in support_stored["result"]["summary"], "support result summary")
     assert_equal(support_transcript_count, 7, "support transcript count")
+
+    rogers_bill = dict(DEMO_BILLS["rogers_loyalty_review"])
+    rogers_bill["_id"] = ObjectId()
+    rogers_context = build_issue_context(rogers_bill, RogersPayload())
+    assert_equal(rogers_context["taskType"], "telecom_negotiation", "rogers mixed refund/rate task stays telecom")
+    rogers_doc = create_negotiation_document(
+        rogers_bill,
+        issue_context=rogers_context,
+        target_monthly=RogersPayload.targetMonthly,
+        walk_away_monthly=RogersPayload.walkAwayMonthly,
+    )
+    rogers_opening = opening_live_turn(rogers_doc)
+    assert_true("$55.00" in rogers_opening["text"], "rogers opening states target")
+    assert_true("35 credit" in rogers_opening["text"].lower(), "rogers opening asks for fee credit")
+
+    credit_only = advance_live_policy(
+        rogers_doc,
+        "I can apply a 35 dollar credit for the roaming fee, but the monthly plan would stay the same.",
+    )
+    assert_equal(credit_only["action"], "ask_for_credit_plus_rate_relief", "rogers credit-only offer is not enough")
+    assert_equal(credit_only["bestCredit"], 35.0, "rogers credit tracked")
+
+    weak_rate = advance_live_policy(
+        {**rogers_doc, "oneTimeCredit": credit_only["bestCredit"], "liveState": credit_only["nextState"]},
+        "I can reduce it to 70 dollars a month and keep the 35 dollar credit.",
+    )
+    assert_equal(weak_rate["action"], "counter_to_target", "rogers weak monthly offer gets countered")
+
+    winning_rate = advance_live_policy(
+        {**rogers_doc, "oneTimeCredit": weak_rate["bestCredit"], "liveState": weak_rate["nextState"]},
+        "I can get approval for 55 dollars a month and a 35 dollar credit.",
+    )
+    assert_equal(winning_rate["action"], "accept_offer", "rogers target monthly and credit is accepted")
+    assert_equal(winning_rate["bestOfferMonthly"], 55.0, "rogers final monthly")
+    assert_equal(winning_rate["bestCredit"], 35.0, "rogers final credit")
+
+    confirmed_rate = advance_live_policy(
+        {
+            **rogers_doc,
+            "bestOfferMonthly": winning_rate["bestOfferMonthly"],
+            "oneTimeCredit": winning_rate["bestCredit"],
+            "liveState": winning_rate["nextState"],
+        },
+        "Confirmed, the new monthly rate is 55 dollars, the 35 dollar credit is applied, it starts next billing cycle, and it is noted on the account.",
+    )
+    assert_equal(confirmed_rate["action"], "confirm_accepted_offer", "rogers proof confirmation action")
+    assert_true(confirmed_rate["completed"], "rogers proof confirmation completes")
 
     print("live policy tests passed")
     settings.agent_mode = original_agent_mode

@@ -92,13 +92,15 @@ def classify_support_utterance(text: str, negotiation: dict[str, Any]) -> str:
         return "close"
     if _has_any(normalized, success_signals) and _has_any(normalized, ["processed", "completed", "done", "confirmed", "resolved", "issued", "applied", "updated", "changed", "rebooked", "refunded", "waived", "removed"]):
         return "resolved_confirmation"
+    if _has_any(normalized, ["callback", "call back", "review and callback", "need a review", "needs a review", "usually need a review", "pending review", "will review", "can review", "wait", "pending", "investigate", "can refund", "can rebook", "can process"]):
+        return "pending_review"
     if _has_any(normalized, ["need", "provide", "verify", "booking", "reference", "account", "email", "phone", "address", "date of birth", "receipt"]):
         return "needs_information"
     if _has_any(normalized, ["supervisor", "specialist", "escalat", "manager", "resolution team"]):
         return "escalation"
     if _has_any(normalized, ["cannot", "can't", "not able", "not eligible", "no refund", "policy does not", "nothing i can do"]):
         return "refusal"
-    if _has_any(normalized, ["check", "review", "case", "ticket", "wait", "pending", "investigate", "can refund", "can rebook", "can process"]):
+    if _has_any(normalized, ["check", "review", "case", "ticket"]):
         return "pending_review"
     if re.search(r"\b(hello|hi)\b|thanks for calling|how can i help", normalized):
         return "greeting"
@@ -128,7 +130,7 @@ def opening_live_turn(negotiation: dict[str, Any]) -> dict[str, Any]:
 
     text = (
         f"Hi, I'm calling about this {negotiation['provider']} bill at ${float(negotiation['currentMonthly']):.2f} a month. "
-        f"Can you check loyalty or retention pricing closer to ${float(negotiation['targetMonthly']):.2f}?"
+        f"Can you check loyalty or retention pricing closer to ${float(negotiation['targetMonthly']):.2f}?{_telecom_goal_suffix(negotiation)}"
     )
     return {
         "role": "negotiator",
@@ -163,6 +165,7 @@ def advance_live_policy(negotiation: dict[str, Any], rep_text: str) -> dict[str,
         if bare_offer is not None and 0 < bare_offer < current:
             proposed_monthly = bare_offer
             rep_intent = "final_discount_offer" if bare_offer <= max(target, walkaway) else "small_discount_offer"
+            best_offer = _best_offer(negotiation.get("bestOfferMonthly"), proposed_monthly)
 
     if awaiting_proof and rep_intent == "close":
         action = "confirm_accepted_offer"
@@ -346,7 +349,7 @@ def phrase_live_action(
             + " now. Before we end, please confirm the effective date and that the account notes show this change."
         ),
         "confirm_accepted_offer": (
-            "Perfect. Please keep that confirmation in the account notes. That resolves what I called about."
+            "Perfect, thank you. That resolves what I called about."
         ),
         "exit_without_accepting": (
             f"I can't accept anything above ${walkaway:.2f}. Please note that we called for retention pricing, "
@@ -482,3 +485,11 @@ def _has_any(text: str, needles: list[str]) -> bool:
 def _is_support_case(negotiation: dict[str, Any]) -> bool:
     issue_context = negotiation.get("issueContext")
     return bool(issue_context and issue_context.get("taskType") != "telecom_negotiation")
+
+
+def _telecom_goal_suffix(negotiation: dict[str, Any]) -> str:
+    issue_context = negotiation.get("issueContext") or {}
+    desired = str(issue_context.get("desiredOutcome") or "").strip().rstrip(".")
+    if not desired:
+        return ""
+    return f" The customer also needs {desired[:1].lower() + desired[1:]}."

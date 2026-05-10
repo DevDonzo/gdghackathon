@@ -16,6 +16,45 @@ import {
 } from "@/lib/api";
 import { BillSummary, Negotiation } from "@/lib/types";
 
+const DEMO_MISSION_PRESETS: Record<
+  string,
+  {
+    companyName: string;
+    issueDescription: string;
+    desiredOutcome: string;
+    targetMonthly: string;
+    walkAwayMonthly: string;
+    customerFacts: string[];
+    constraints: string[];
+    completionCriteria: string[];
+    customAngles?: string[];
+  }
+> = {
+  rogers_loyalty_review: {
+    companyName: "Rogers",
+    issueDescription: "The monthly bill is too high and there is a disputed $35 roaming fee that should be credited.",
+    desiredOutcome: "Lower the monthly bill to $55 and apply a $35 credit for the disputed roaming fee.",
+    targetMonthly: "55",
+    walkAwayMonthly: "60",
+    customerFacts: [
+      "Current Rogers bill is $91.50 on Infinite Essentials 75",
+      "There is a disputed $35 roaming fee",
+      "Comparable plans are materially cheaper"
+    ],
+    constraints: [
+      "Do not accept a vague callback",
+      "Do not accept only a one-time credit without monthly rate relief",
+      "Ask for loyalty or retention if frontline support cannot approve it"
+    ],
+    completionCriteria: [
+      "Rep confirms the new monthly rate",
+      "Rep confirms the $35 credit",
+      "Rep confirms the effective date and account notes"
+    ],
+    customAngles: ["Refund incorrect roaming fee", "Lower monthly plan rate", "Retention review"]
+  }
+};
+
 export function UploadPanel() {
   const router = useRouter();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -143,10 +182,18 @@ export function UploadPanel() {
     setLoadingDemo(scenarioId);
     try {
       const extracted = await createDemoBill(scenarioId);
+      const preset = DEMO_MISSION_PRESETS[scenarioId];
       setBill(extracted);
       setSelectedFile(null);
-      setCompanyName(extracted.provider);
-      setCustomAngles([]);
+      setCompanyName(preset?.companyName ?? extracted.provider);
+      setIssueDescription(preset?.issueDescription ?? "");
+      setDesiredOutcome(preset?.desiredOutcome ?? "");
+      setTargetMonthly(preset?.targetMonthly ?? "");
+      setWalkAwayMonthly(preset?.walkAwayMonthly ?? "");
+      setCustomerFacts(preset?.customerFacts ?? []);
+      setConstraints(preset?.constraints ?? []);
+      setCompletionCriteria(preset?.completionCriteria ?? []);
+      setCustomAngles(preset?.customAngles ?? []);
       setCustomInput("");
       await refreshRecentNegotiations();
       await refreshDemoBills();
@@ -208,6 +255,7 @@ export function UploadPanel() {
   }
 
   const readyForLaunch = Boolean(bill && hasUserMission());
+  const visibleDemoBills = demoBills.filter((item) => item.id === "rogers_loyalty_review");
 
   return (
     <section className="agent-workspace" aria-label="Agent deployment">
@@ -246,10 +294,10 @@ export function UploadPanel() {
           </button>
         </form>
 
-        {demoBills.length > 0 ? (
+        {visibleDemoBills.length > 0 ? (
           <div className="demo-list">
-            <span className="mini-label">Demo scenarios</span>
-            {demoBills.map((item) => (
+            <span className="mini-label">Demo scenario</span>
+            {visibleDemoBills.map((item) => (
               <button
                 className="demo-row"
                 key={item.id}
