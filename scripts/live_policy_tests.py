@@ -142,7 +142,7 @@ def main() -> int:
         with client.websocket_connect(f"/ws/conversation-relay/{inserted.inserted_id}") as websocket:
             opening = websocket.receive_json()
             assert_equal(opening["type"], "text", "websocket opening type")
-            assert_true("retention" in opening["token"].lower(), "websocket opening line")
+            assert_true("monthly rate" in opening["token"].lower(), "websocket opening line")
             websocket.send_json({"type": "setup", "callSid": "CA_TEST", "sessionId": "VX_TEST"})
             websocket.send_json({"type": "prompt", "voicePrompt": "I can get approval for 52 dollars a month and a 25 dollar credit.", "last": True})
             reply = websocket.receive_json()
@@ -166,17 +166,17 @@ def main() -> int:
     with TestClient(app) as client:
         with client.websocket_connect(f"/ws/conversation-relay/{multi_inserted.inserted_id}") as websocket:
             opening = websocket.receive_json()
-            assert_true("retention" in opening["token"].lower(), "multi-turn opening line")
+            assert_true("monthly rate" in opening["token"].lower(), "multi-turn opening line")
             websocket.send_json({"type": "setup", "callSid": "CA_MULTI", "sessionId": "VX_MULTI"})
 
             websocket.send_json({"type": "prompt", "voicePrompt": "Thanks for calling Bell, how can I help?", "last": True})
             greeting_reply = drain_text_or_end(websocket)[-1]
             assert_equal(greeting_reply["type"], "text", "greeting reply type")
-            assert_true("retention" in greeting_reply["token"].lower(), "greeting pushes toward retention")
+            assert_true("monthly rate" in greeting_reply["token"].lower(), "greeting pushes toward bill resolution")
 
             websocket.send_json({"type": "prompt", "voicePrompt": "I do not see any promotions available.", "last": True})
             refusal_reply = drain_text_or_end(websocket)[-1]
-            assert_true("check retention" in refusal_reply["token"].lower() or "loyalty" in refusal_reply["token"].lower(), "refusal reply asks for retention")
+            assert_true("monthly bill" in refusal_reply["token"].lower(), "refusal reply asks for bill resolution")
 
             websocket.send_json({"type": "prompt", "voicePrompt": "I can reduce it to 70 dollars a month.", "last": True})
             small_offer_reply = drain_text_or_end(websocket)[-1]
@@ -262,7 +262,7 @@ def main() -> int:
     )
     rogers_opening = opening_live_turn(rogers_doc)
     assert_true("$55.00" in rogers_opening["text"], "rogers opening states target")
-    assert_true("35 credit" in rogers_opening["text"].lower(), "rogers opening asks for fee credit")
+    assert_true("35 disputed charge credited" in rogers_opening["text"].lower(), "rogers opening asks for fee credit")
 
     credit_only = advance_live_policy(
         rogers_doc,

@@ -130,7 +130,7 @@ def opening_live_turn(negotiation: dict[str, Any]) -> dict[str, Any]:
 
     text = (
         f"Hi, I'm calling about this {negotiation['provider']} bill at ${float(negotiation['currentMonthly']):.2f} a month. "
-        f"Can you check loyalty or retention pricing closer to ${float(negotiation['targetMonthly']):.2f}?{_telecom_goal_suffix(negotiation)}"
+        f"{_telecom_mission_phrase(negotiation)} Can you help with both on this call?"
     )
     return {
         "role": "negotiator",
@@ -328,16 +328,17 @@ def phrase_live_action(
     state = negotiation.get("liveState") or {}
     repeated_counter = int(state.get("counterCount", 0)) > 0
 
+    mission = _telecom_mission_phrase(negotiation)
     lines = {
         "push_for_retention": (
-            "I understand. Can you check loyalty or retention pricing?"
+            "I understand. What can you apply today to lower the monthly bill and fix the disputed charge?"
             if state.get("lastAction") == "push_for_retention"
-            else f"I understand. Can you check loyalty or retention pricing? ${current:.2f} a month is too high for this plan."
+            else f"I understand. {mission} What can you apply today?"
         ),
         "counter_to_target": (
-            "That's still higher than the customer can justify. Is there a better retention rate you can approve today?"
+            "That's still higher than the customer can justify. Is there a better monthly rate you can approve today?"
             if repeated_counter
-            else f"That's better, but it still leaves the bill high. If you can do ${target:.2f} a month, we can settle it on this call."
+            else f"That's better, but it still leaves the bill high. If you can do ${target:.2f} a month with the credit applied, we can settle it on this call."
         ),
         "ask_for_credit_plus_rate_relief": (
             f"I appreciate the credit. The monthly charge is still the real issue. "
@@ -352,7 +353,7 @@ def phrase_live_action(
             "Perfect, thank you. That resolves what I called about."
         ),
         "exit_without_accepting": (
-            f"I can't accept anything above ${walkaway:.2f}. Please note that we called for retention pricing, "
+            f"I can't accept anything above ${walkaway:.2f}. Please note that we called to resolve the bill and disputed charge, "
             "and the customer will compare alternatives."
         ),
     }
@@ -493,3 +494,25 @@ def _telecom_goal_suffix(negotiation: dict[str, Any]) -> str:
     if not desired:
         return ""
     return f" The customer also needs {desired[:1].lower() + desired[1:]}."
+
+
+def _telecom_mission_phrase(negotiation: dict[str, Any]) -> str:
+    target = float(negotiation["targetMonthly"])
+    credit = _requested_credit_amount(negotiation)
+    if credit:
+        return f"We need the monthly rate brought to ${target:.2f} and the ${credit:.0f} disputed charge credited."
+    return f"We need the monthly rate brought closer to ${target:.2f}."
+
+
+def _requested_credit_amount(negotiation: dict[str, Any]) -> float | None:
+    issue_context = negotiation.get("issueContext") or {}
+    text = " ".join(
+        [
+            str(issue_context.get("desiredOutcome") or ""),
+            str(issue_context.get("problemSummary") or ""),
+            " ".join(str(item) for item in issue_context.get("customerFacts", [])),
+            " ".join(str(item) for item in negotiation.get("customAngles", [])),
+        ]
+    )
+    match = re.search(r"\$?(\d+(?:\.\d{1,2})?)\s*(?:dollars?)?\s*(?:credit|fee|charge|roaming)", _normalize_number_words(text.lower()))
+    return round(float(match.group(1)), 2) if match else None

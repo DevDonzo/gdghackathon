@@ -44,7 +44,7 @@ const DEMO_MISSION_PRESETS: Record<
     constraints: [
       "Do not accept a vague callback",
       "Do not accept only a one-time credit without monthly rate relief",
-      "Ask for loyalty or retention if frontline support cannot approve it"
+      "Ask for a supervisor if frontline support cannot approve both fixes"
     ],
     completionCriteria: [
       "Rep confirms the new monthly rate",
