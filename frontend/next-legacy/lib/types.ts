@@ -52,6 +52,16 @@ export type IssueContext = {
   contactLookup?: Record<string, unknown> | null;
 };
 
+export type StrategyProof = {
+  marketBenchmark: number;
+  feePressure: number;
+  targetMonthly: number;
+  walkAwayMonthly: number;
+  policySummary: string;
+  evidence: string[];
+  sandboxDisclosure: string;
+};
+
 export type Negotiation = {
   id: string;
   billId: string;
@@ -67,6 +77,7 @@ export type Negotiation = {
   currentObjective: string;
   call: CallState;
   result: NegotiationResult | null;
+  strategyProof?: StrategyProof | null;
   issueContext?: IssueContext;
   createdAt: string;
   startedAt: string | null;

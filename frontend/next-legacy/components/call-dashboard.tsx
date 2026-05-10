@@ -52,6 +52,56 @@ export function CallDashboard({ negotiationId }: Props) {
     return Math.min(100, Math.round((turns.length / totalSteps) * 100));
   }, [turns.length]);
 
+  const reasoning = useMemo(() => {
+    if (!negotiation) {
+      return null;
+    }
+
+    const lastTurn = turns[turns.length - 1] ?? null;
+    const lastAgentTurn = [...turns].reverse().find((turn) => turn.role === "negotiator") ?? null;
+    const lastRepTurn = [...turns].reverse().find((turn) => turn.role === "rep") ?? null;
+    const strategy = negotiation.strategyProof;
+    const target = money(negotiation.targetMonthly);
+    const walkAway = money(negotiation.walkAwayMonthly);
+    const benchmark = strategy ? money(strategy.marketBenchmark) : null;
+
+    let decision = negotiation.currentObjective;
+    let why = strategy?.policySummary ?? "The backend policy is holding the call inside the user-approved target and completion criteria.";
+
+    if (lastRepTurn?.proposedMonthly) {
+      const offer = money(lastRepTurn.proposedMonthly);
+      if (lastRepTurn.proposedMonthly <= negotiation.walkAwayMonthly) {
+        decision = `Accepting ${offer}/mo because it is within the walk-away ceiling.`;
+        why = `The rep offer is at or below ${walkAway}, so the agent asks for proof instead of continuing to negotiate.`;
+      } else {
+        decision = `Countering because ${offer}/mo is still above the walk-away ceiling.`;
+        why = `The user target is ${target}${benchmark ? ` and the market benchmark is ${benchmark}` : ""}, so the policy pushes for a better recurring rate.`;
+      }
+    } else if (lastRepTurn?.credit) {
+      decision = `Asking for monthly relief because the rep only offered a ${money(lastRepTurn.credit)} credit.`;
+      why = "A one-time credit helps, but the policy prioritizes recurring monthly savings before accepting.";
+    } else if (lastTurn?.role === "rep") {
+      decision = lastTurn.intent === "refusal" ? "Escalating after refusal." : negotiation.currentObjective;
+      why = `The latest rep intent is ${lastTurn.intent.replaceAll("_", " ")}, so the next response follows the bounded policy instead of improvising.`;
+    } else if (lastAgentTurn) {
+      decision = lastAgentTurn.objective;
+      why = `Last agent action: ${lastAgentTurn.intent.replaceAll("_", " ")}. The next move waits for the representative response.`;
+    }
+
+    return {
+      decision,
+      why,
+      lastIntent: lastTurn?.intent ?? "waiting",
+      guardrails: [
+        `Target: ${target}/mo`,
+        `Walk-away: ${walkAway}/mo`,
+        benchmark ? `Benchmark: ${benchmark}/mo` : null,
+        strategy?.feePressure ? `Fee pressure: ${money(strategy.feePressure)}` : null,
+      ].filter(Boolean) as string[],
+      evidence: strategy?.evidence.slice(0, 3) ?? [],
+    };
+  }, [negotiation, turns]);
+
   useEffect(() => {
     let active = true;
     const source = new EventSource(eventsUrl(negotiationId));
@@ -193,6 +243,22 @@ export function CallDashboard({ negotiationId }: Props) {
             </div>
           </div>
 
+          {reasoning ? (
+            <div className="reasoning-panel mb-16">
+              <div className="reasoning-pulse" aria-hidden="true" />
+              <div>
+                <span className="mono text-muted text-[10px] block mb-2 font-bold">LIVE_REASONING</span>
+                <h3>{reasoning.decision}</h3>
+                <p>{reasoning.why}</p>
+              </div>
+              <div className="reasoning-tags">
+                {reasoning.guardrails.map((item) => (
+                  <span key={item}>{item}</span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex flex-col gap-6">
             {turns.length === 0 && (
               <div className="p-16 border border-dashed border-black/10 text-center mono text-muted italic">
@@ -241,6 +307,33 @@ export function CallDashboard({ negotiationId }: Props) {
                 </div>
               </div>
            </div>
+
+           {reasoning ? (
+             <div className="p-10 border border-black/5 bg-white shadow-xl">
+                <span className="section-tag mb-6">Policy_Trace</span>
+                <h3 className="text-2xl font-black italic mb-6">WHY THIS MOVE</h3>
+                <div className="policy-trace">
+                  <div>
+                    <span>Intent</span>
+                    <strong>{reasoning.lastIntent.replaceAll("_", " ").toUpperCase()}</strong>
+                  </div>
+                  <div>
+                    <span>Decision</span>
+                    <strong>{reasoning.decision}</strong>
+                  </div>
+                  {reasoning.evidence.length ? (
+                    <div>
+                      <span>Evidence</span>
+                      <ul>
+                        {reasoning.evidence.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+             </div>
+           ) : null}
 
            {negotiation.status === "completed" && (
              <Link className="primary-button h-20 text-lg shadow-2xl" href={`/result/${negotiation.id}`}>
