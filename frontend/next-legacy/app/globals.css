@@ -805,6 +805,10 @@ h3 {
   padding: 150px 0 90px;
 }
 
+.workspace-section {
+  padding-top: 122px;
+}
+
 .auth-copy {
   max-width: 720px;
 }
@@ -948,14 +952,162 @@ h3 {
 
 .deploy-heading {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(260px, 0.42fr);
-  gap: 34px;
-  align-items: end;
-  margin-bottom: 32px;
+  grid-template-columns: minmax(280px, 0.62fr) minmax(0, 1fr);
+  gap: clamp(24px, 5vw, 72px);
+  align-items: center;
+  margin-bottom: 26px;
 }
 
 .deploy-heading p {
+  max-width: 620px;
   line-height: 1.6;
+}
+
+.deploy-heading h1 {
+  justify-self: end;
+  max-width: 9ch;
+  margin-top: 0;
+  font-size: clamp(3.4rem, 6.4vw, 6.8rem);
+}
+
+.agent-workspace {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.workspace-rail {
+  position: sticky;
+  top: 112px;
+  display: grid;
+  gap: 18px;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  padding: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 248, 243, 0.84)),
+    radial-gradient(circle at 20% 0%, rgba(0, 0, 0, 0.08), transparent 34%);
+  box-shadow: 0 16px 46px rgba(0, 0, 0, 0.06);
+}
+
+.workspace-rail strong {
+  display: block;
+  font-size: 1.45rem;
+  letter-spacing: -0.045em;
+  line-height: 1.05;
+}
+
+.workspace-rail p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.workspace-progress {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
+.workspace-progress span {
+  display: flex;
+  justify-content: space-between;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 10px;
+  color: var(--muted);
+  font-family: var(--font-mono), var(--font-code);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.workspace-progress span::after {
+  content: "Open";
+}
+
+.workspace-progress .is-done {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.workspace-progress .is-done::after {
+  content: "Set";
+}
+
+.workspace-main {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.62fr) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.workspace-main .workspace-card {
+  border-radius: 34px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(247, 247, 242, 0.82));
+  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.07);
+}
+
+.evidence-card,
+.outcome-card {
+  align-self: start;
+}
+
+.mission-card {
+  position: relative;
+  grid-row: span 2;
+  padding-right: clamp(24px, 4vw, 42px);
+}
+
+.compact-panel-head p {
+  max-width: 680px;
+}
+
+.mission-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.78fr);
+  gap: 16px;
+  align-items: stretch;
+  margin-top: 24px;
+}
+
+.mission-chip-stack {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  border-left: 1px solid var(--line);
+  padding-left: 16px;
+}
+
+.mission-presets {
+  display: flex;
+  justify-content: flex-end;
+  position: absolute;
+  top: 28px;
+  right: 28px;
+  margin: 0;
+}
+
+.mission-presets button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 9px 13px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--font-mono), var(--font-code);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.money-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
 }
 
 .deploy-grid {
@@ -988,26 +1140,29 @@ h3 {
 .chip-editor,
 .recent-list {
   display: grid;
-  gap: 12px;
-  margin-top: 24px;
+  gap: 10px;
+  margin-top: 20px;
 }
 
 .dropzone {
   display: grid;
   place-items: center;
-  min-height: 178px;
+  min-height: 150px;
   border: 1px dashed var(--line-strong);
-  border-radius: 22px;
-  padding: 26px;
+  border-radius: 26px;
+  padding: 22px;
   text-align: center;
   cursor: pointer;
-  background: rgba(0, 0, 0, 0.025);
-  transition: border-color 160ms ease, background 160ms ease;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(0, 0, 0, 0.02)),
+    repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.028) 0 1px, transparent 1px 10px);
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }
 
 .dropzone:hover {
   border-color: var(--accent);
   background: var(--accent-soft);
+  transform: translateY(-1px);
 }
 
 .dropzone span {
@@ -1049,7 +1204,7 @@ h3 {
 .demo-list,
 .recent-list {
   border-top: 1px solid var(--line);
-  padding-top: 20px;
+  padding-top: 18px;
 }
 
 .demo-row,
@@ -1057,18 +1212,19 @@ h3 {
   gap: 14px;
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 18px;
-  padding: 14px;
-  background: rgba(0, 0, 0, 0.025);
+  border-radius: 20px;
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.64);
   text-align: left;
   cursor: pointer;
-  transition: border-color 160ms ease, background 160ms ease;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }
 
 .demo-row:hover,
 .recent-row:hover {
   border-color: var(--line-strong);
-  background: var(--accent-soft);
+  background: rgba(255, 255, 255, 0.94);
+  transform: translateY(-1px);
 }
 
 .demo-row strong,
@@ -1076,6 +1232,32 @@ h3 {
 .recent-row strong,
 .recent-row small {
   display: block;
+}
+
+.agent-workspace .demo-row strong,
+.agent-workspace .recent-row strong,
+.agent-workspace .bill-proof strong {
+  color: var(--ink);
+  font-family: var(--font-sans), var(--font-body);
+  font-size: 1rem;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  text-transform: none;
+}
+
+.agent-workspace .demo-row span,
+.agent-workspace .recent-row span,
+.agent-workspace .bill-proof span {
+  letter-spacing: 0;
+}
+
+.agent-workspace .demo-row small,
+.agent-workspace .recent-row small {
+  color: var(--muted);
+  font-family: var(--font-mono), var(--font-code);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .demo-row small,
@@ -1094,7 +1276,7 @@ h3 {
 
 .mission-fields label {
   display: grid;
-  gap: 8px;
+  gap: 7px;
 }
 
 .mission-fields label span {
@@ -1109,13 +1291,22 @@ input,
 textarea {
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.8);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
   padding: 14px 15px;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+input:focus,
+textarea:focus {
+  border-color: var(--line-strong);
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.045);
+  outline: none;
 }
 
 textarea {
-  min-height: 108px;
+  min-height: 96px;
   resize: vertical;
 }
 
@@ -1124,9 +1315,18 @@ textarea {
 }
 
 .chip-input-row button {
-  min-width: 82px;
+  min-width: 74px;
   min-height: 48px;
-  padding-inline: 16px;
+  border-radius: 999px;
+  padding-inline: 15px;
+  background: var(--ink);
+  color: var(--bg);
+  cursor: pointer;
+  font-family: var(--font-mono), var(--font-code);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .chip-list {
@@ -1151,9 +1351,16 @@ textarea {
 
 .bill-proof {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
   margin-top: 22px;
+}
+
+.bill-proof div {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .empty-state,
@@ -1877,6 +2084,9 @@ textarea {
   .cloud-section,
   .auth-section,
   .deploy-heading,
+  .agent-workspace,
+  .workspace-main,
+  .mission-form-grid,
   .deploy-grid,
   .bill-proof,
   .result-grid,
@@ -1890,6 +2100,11 @@ textarea {
 
   .cloud-stack {
     grid-template-columns: 1fr;
+  }
+
+  .workspace-rail {
+    position: relative;
+    top: auto;
   }
 
   .result-metrics article {
@@ -1966,6 +2181,10 @@ textarea {
 
   .install-steps div {
     grid-template-columns: 34px 1fr;
+  }
+
+  .money-fields {
+    grid-template-columns: 1fr;
   }
 
   .install-steps code {

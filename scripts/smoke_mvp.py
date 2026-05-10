@@ -35,7 +35,16 @@ def main() -> int:
         bill = request_json(f"/api/bills/demo/{first_demo['id']}", method="POST")
         print("bill id:", bill["id"])
 
-        negotiation = request_json("/api/negotiations", method="POST", payload={"billId": bill["id"]})
+        negotiation = request_json(
+            "/api/negotiations",
+            method="POST",
+            payload={
+                "billId": bill["id"],
+                "desiredOutcome": "Lower the monthly bill to the customer-approved target.",
+                "targetMonthly": 52,
+                "walkAwayMonthly": 58,
+            },
+        )
         print("negotiation id:", negotiation["id"])
 
         started = request_json(f"/api/negotiations/{negotiation['id']}/start", method="POST")

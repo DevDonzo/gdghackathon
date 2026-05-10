@@ -34,7 +34,7 @@ class MarketProfile:
 
 
 MARKET_PROFILES = {
-    "bell": MarketProfile(benchmark_monthly=58.0, retention_floor=52.0, first_offer_spread=16.0, loyalty_credit=25.0),
+    "bell": MarketProfile(benchmark_monthly=58.0, retention_floor=0.0, first_offer_spread=16.0, loyalty_credit=25.0),
     "rogers": MarketProfile(benchmark_monthly=78.0, retention_floor=73.5, first_offer_spread=10.0, loyalty_credit=0.0),
     "telus": MarketProfile(benchmark_monthly=66.0, retention_floor=65.0, first_offer_spread=6.0, loyalty_credit=20.0),
 }
@@ -145,14 +145,24 @@ def _bill_pressure(bill: dict[str, Any]) -> dict[str, float | bool]:
     }
 
 
-def _financials(bill: dict[str, Any], scenario: Scenario) -> dict[str, float]:
+def _financials(
+    bill: dict[str, Any],
+    scenario: Scenario,
+    target_monthly: float | None = None,
+    walk_away_monthly: float | None = None,
+) -> dict[str, float]:
     current = float(bill["monthlyTotal"])
     profile = _provider_profile(str(bill.get("provider", "")), current)
     pressure = _bill_pressure(bill)
     fee_credit = float(pressure["fee_total"])
     recurring_extra = float(pressure["recurring_extra"])
-    benchmark = min(profile.benchmark_monthly, max(profile.retention_floor, current - 6.0))
-    target_anchor = profile.retention_floor
+    retention_floor = (
+        profile.retention_floor
+        if profile.retention_floor > 0
+        else _round_money(round(profile.benchmark_monthly * 0.9))
+    )
+    benchmark = min(profile.benchmark_monthly, max(retention_floor, current - 6.0))
+    target_anchor = retention_floor
 
     if pressure["promo_pressure"]:
         target_anchor = min(target_anchor, profile.benchmark_monthly - 4.0)
@@ -169,14 +179,20 @@ def _financials(bill: dict[str, Any], scenario: Scenario) -> dict[str, float]:
         credit = profile.loyalty_credit if fee_credit <= 0 else min(40.0, fee_credit + 10.0)
     elif scenario.scenario_id == "fee_recovery_path":
         credit = _round_money(min(max(fee_credit, profile.loyalty_credit, 20.0), 45.0))
-        offer_two = _round_money(max(profile.retention_floor, current - min(max(recurring_extra, fee_credit, 8.0), 14.0)))
+        offer_two = _round_money(max(retention_floor, current - min(max(recurring_extra, fee_credit, 8.0), 14.0)))
         offer_one = _round_money(min(current - 3.0, max(offer_two + 4.0, current - 6.0)))
         walk_away = current
     else:
-        offer_two = _round_money(max(profile.retention_floor, min(current - 8.0, benchmark - 2.0)))
+        offer_two = _round_money(max(retention_floor, min(current - 8.0, benchmark - 2.0)))
         offer_one = _round_money(min(current - 4.0, max(offer_two + profile.first_offer_spread * 0.7, benchmark + 2.0)))
         walk_away = _round_money(min(current - 3.0, max(offer_two + 6.0, benchmark)))
         credit = 0.0
+
+    if target_monthly is not None and 0 < target_monthly < current:
+        offer_two = _round_money(target_monthly)
+        offer_one = _round_money(min(current - 1.0, max(offer_two + min(profile.first_offer_spread, 16.0), offer_two)))
+    if walk_away_monthly is not None and 0 < walk_away_monthly <= current:
+        walk_away = _round_money(max(offer_two, walk_away_monthly))
 
     return {
         "current": _round_money(current),
@@ -189,8 +205,13 @@ def _financials(bill: dict[str, Any], scenario: Scenario) -> dict[str, float]:
     }
 
 
-def _plan_blueprints(bill: dict[str, Any], scenario: Scenario) -> tuple[list[dict[str, Any]], dict[str, float]]:
-    money = _financials(bill, scenario)
+def _plan_blueprints(
+    bill: dict[str, Any],
+    scenario: Scenario,
+    target_monthly: float | None = None,
+    walk_away_monthly: float | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, float]]:
+    money = _financials(bill, scenario, target_monthly=target_monthly, walk_away_monthly=walk_away_monthly)
     provider = bill["provider"]
     plan_name = bill["planName"]
     angles = bill.get("negotiationAngles", [])
@@ -289,9 +310,18 @@ def _phrase_turns_with_gemini(turns: list[dict[str, Any]], bill: dict[str, Any],
     return [item["say"].strip() for item in phrased]
 
 
-def build_negotiation_plan(bill: dict[str, Any]) -> dict[str, Any]:
+def build_negotiation_plan(
+    bill: dict[str, Any],
+    target_monthly: float | None = None,
+    walk_away_monthly: float | None = None,
+) -> dict[str, Any]:
     scenario = _determine_scenario(bill)
-    blueprints, money = _plan_blueprints(bill, scenario)
+    blueprints, money = _plan_blueprints(
+        bill,
+        scenario,
+        target_monthly=target_monthly,
+        walk_away_monthly=walk_away_monthly,
+    )
     try:
         phrased = _phrase_turns_with_gemini(blueprints, bill, money)
     except Exception:
@@ -386,11 +416,20 @@ def _strategy_proof(bill: dict[str, Any], scenario: Scenario, money: dict[str, f
     }
 
 
-def create_negotiation_document(bill: dict[str, Any], issue_context: dict[str, Any] | None = None) -> dict[str, Any]:
+def create_negotiation_document(
+    bill: dict[str, Any],
+    issue_context: dict[str, Any] | None = None,
+    target_monthly: float | None = None,
+    walk_away_monthly: float | None = None,
+) -> dict[str, Any]:
     if issue_context and not is_telecom_context(issue_context):
         plan = build_support_plan(bill, issue_context)
     else:
-        plan = build_negotiation_plan(bill)
+        plan = build_negotiation_plan(
+            bill,
+            target_monthly=target_monthly,
+            walk_away_monthly=walk_away_monthly,
+        )
     now = datetime.now(UTC)
     return {
         "billId": bill["_id"],

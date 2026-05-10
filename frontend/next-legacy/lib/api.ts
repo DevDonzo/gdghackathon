@@ -51,6 +51,8 @@ export async function createNegotiation(
     companyName?: string;
     issueDescription?: string;
     desiredOutcome?: string;
+    targetMonthly?: number | null;
+    walkAwayMonthly?: number | null;
     customerFacts?: string[];
     constraints?: string[];
     completionCriteria?: string[];

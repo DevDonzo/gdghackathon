@@ -32,6 +32,8 @@ export function UploadPanel() {
   const [companyName, setCompanyName] = useState("");
   const [issueDescription, setIssueDescription] = useState("");
   const [desiredOutcome, setDesiredOutcome] = useState("");
+  const [targetMonthly, setTargetMonthly] = useState("");
+  const [walkAwayMonthly, setWalkAwayMonthly] = useState("");
   const [customerFacts, setCustomerFacts] = useState<string[]>([]);
   const [factInput, setFactInput] = useState("");
   const [constraints, setConstraints] = useState<string[]>([]);
@@ -105,6 +107,10 @@ export function UploadPanel() {
     if (!bill) {
       return;
     }
+    if (!hasUserMission()) {
+      setError("Add the outcome, target, or completion proof before starting the voice agent.");
+      return;
+    }
 
     setError(null);
     setStarting(true);
@@ -114,6 +120,8 @@ export function UploadPanel() {
             companyName,
             issueDescription,
             desiredOutcome,
+            targetMonthly: parseMoneyInput(targetMonthly),
+            walkAwayMonthly: parseMoneyInput(walkAwayMonthly),
             customerFacts,
             constraints,
             completionCriteria
@@ -151,12 +159,27 @@ export function UploadPanel() {
 
   function hasIssueContext() {
     return Boolean(
-      companyName ||
-        issueDescription ||
-        desiredOutcome ||
+      companyName.trim() ||
+        issueDescription.trim() ||
+        desiredOutcome.trim() ||
+        targetMonthly.trim() ||
+        walkAwayMonthly.trim() ||
         customerFacts.length ||
         constraints.length ||
         completionCriteria.length
+    );
+  }
+
+  function hasUserMission() {
+    return Boolean(
+      issueDescription.trim() ||
+        desiredOutcome.trim() ||
+        targetMonthly.trim() ||
+        walkAwayMonthly.trim() ||
+        customerFacts.length ||
+        constraints.length ||
+        completionCriteria.length ||
+        customAngles.length
     );
   }
 
@@ -184,15 +207,28 @@ export function UploadPanel() {
     return item.status.replace("-", " ");
   }
 
-  return (
-    <section className="deploy-grid" aria-label="Agent deployment">
-      <div className="deploy-card">
-        <div className="panel-head">
-          <span className="section-tag">Input</span>
-          <h3>Bill or receipt</h3>
-          <p>Start with a real statement or load a demo scenario. The extracted bill becomes the agent mission.</p>
-        </div>
+  const readyForLaunch = Boolean(bill && hasUserMission());
 
+  return (
+    <section className="agent-workspace" aria-label="Agent deployment">
+      <div className="workspace-rail">
+        <span className="mini-label">Mission setup</span>
+        <strong>{bill ? bill.provider : "Choose evidence"}</strong>
+        <p>{bill ? "Evidence loaded. Now enter what the agent should push for and what counts as done." : "Load sample evidence or scan a real statement, then define the mission yourself."}</p>
+        <div className="workspace-progress" aria-label="Setup progress">
+          <span className={bill ? "is-done" : ""}>Evidence</span>
+          <span className={hasUserMission() ? "is-done" : ""}>Mission</span>
+          <span className={readyForLaunch ? "is-done" : ""}>Launch</span>
+        </div>
+      </div>
+
+      <div className="workspace-main">
+        <div className="workspace-card evidence-card">
+          <div className="panel-head compact-panel-head">
+            <span className="section-tag">Evidence</span>
+            <h3>Start with a bill.</h3>
+            <p>Use sample evidence for a clean phone test, or scan a real statement.</p>
+          </div>
         <form className="upload-form" onSubmit={handleUpload}>
           <label className="dropzone" htmlFor="bill-upload">
             <span>{selectedFile ? selectedFile.name : "Select statement file"}</span>
@@ -230,65 +266,97 @@ export function UploadPanel() {
             ))}
           </div>
         ) : null}
-      </div>
-
-      <div className="deploy-card mission-card">
-        <div className="panel-head">
-          <span className="section-tag">Mission</span>
-          <h3>What should the agent fix?</h3>
-          <p>Optional context lets RateDrop handle more than telecom negotiation, like refunds, disputes, travel support, or account fixes.</p>
         </div>
 
-        <div className="mission-fields">
-          <label>
-            <span>Company</span>
-            <input value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="Bell, Air Canada, Rogers..." />
-          </label>
-          <label>
-            <span>Problem</span>
-            <textarea value={issueDescription} onChange={(event) => setIssueDescription(event.target.value)} placeholder="Describe the charge, booking, account issue, or outcome gap." />
-          </label>
-          <label>
-            <span>Desired outcome</span>
-            <input value={desiredOutcome} onChange={(event) => setDesiredOutcome(event.target.value)} placeholder="Refund, lower monthly rate, rebooking, fee removed..." />
-          </label>
+        <div className="workspace-card mission-card">
+          <div className="panel-head compact-panel-head">
+            <span className="section-tag">Mission</span>
+            <h3>What should happen on the call?</h3>
+            <p>Tell the agent what you want. The bill is evidence, but your fields control the mission.</p>
+          </div>
+
+          <div className="mission-presets">
+            <button
+              type="button"
+              onClick={() => {
+                setCompanyName("");
+                setIssueDescription("");
+                setDesiredOutcome("");
+                setTargetMonthly("");
+                setWalkAwayMonthly("");
+                setCustomerFacts([]);
+                setConstraints([]);
+                setCompletionCriteria([]);
+              }}
+            >
+              Clear
+            </button>
+          </div>
+
+          <div className="mission-form-grid">
+            <div className="mission-fields">
+              <label>
+                <span>Company</span>
+                <input value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="Bell, Air Canada, Rogers..." />
+              </label>
+              <label>
+                <span>Problem</span>
+                <textarea value={issueDescription} onChange={(event) => setIssueDescription(event.target.value)} placeholder="Describe the charge, booking, account issue, or outcome gap." />
+              </label>
+              <label>
+                <span>Desired outcome</span>
+                <input value={desiredOutcome} onChange={(event) => setDesiredOutcome(event.target.value)} placeholder="Refund, lower monthly rate, rebooking, fee removed..." />
+              </label>
+              <div className="money-fields">
+                <label>
+                  <span>Target monthly</span>
+                  <input inputMode="decimal" value={targetMonthly} onChange={(event) => setTargetMonthly(event.target.value)} placeholder="Your target price" />
+                </label>
+                <label>
+                  <span>Walk-away max</span>
+                  <input inputMode="decimal" value={walkAwayMonthly} onChange={(event) => setWalkAwayMonthly(event.target.value)} placeholder="Highest acceptable price" />
+                </label>
+              </div>
+            </div>
+
+            <div className="mission-chip-stack">
+              <ChipEditor
+                label="Known facts"
+                value={factInput}
+                values={customerFacts}
+                placeholder="Account detail, receipt total, current bill..."
+                onValue={setFactInput}
+                onAdd={() => addChip(factInput, customerFacts, setCustomerFacts, () => setFactInput(""))}
+                onRemove={(item) => setCustomerFacts(customerFacts.filter((fact) => fact !== item))}
+              />
+              <ChipEditor
+                label="Constraints"
+                value={constraintInput}
+                values={constraints}
+                placeholder="No contract, no vague callback..."
+                onValue={setConstraintInput}
+                onAdd={() => addChip(constraintInput, constraints, setConstraints, () => setConstraintInput(""))}
+                onRemove={(item) => setConstraints(constraints.filter((constraint) => constraint !== item))}
+              />
+              <ChipEditor
+                label="Completion proof"
+                value={criteriaInput}
+                values={completionCriteria}
+                placeholder="Rep confirms rate, date, notes..."
+                onValue={setCriteriaInput}
+                onAdd={() => addChip(criteriaInput, completionCriteria, setCompletionCriteria, () => setCriteriaInput(""))}
+                onRemove={(item) => setCompletionCriteria(completionCriteria.filter((criterion) => criterion !== item))}
+              />
+            </div>
+          </div>
         </div>
 
-        <ChipEditor
-          label="Known facts"
-          value={factInput}
-          values={customerFacts}
-          placeholder="Booking ref, account number, receipt total..."
-          onValue={setFactInput}
-          onAdd={() => addChip(factInput, customerFacts, setCustomerFacts, () => setFactInput(""))}
-          onRemove={(item) => setCustomerFacts(customerFacts.filter((fact) => fact !== item))}
-        />
-        <ChipEditor
-          label="Constraints"
-          value={constraintInput}
-          values={constraints}
-          placeholder="Do not accept vague callback..."
-          onValue={setConstraintInput}
-          onAdd={() => addChip(constraintInput, constraints, setConstraints, () => setConstraintInput(""))}
-          onRemove={(item) => setConstraints(constraints.filter((constraint) => constraint !== item))}
-        />
-        <ChipEditor
-          label="Completion proof"
-          value={criteriaInput}
-          values={completionCriteria}
-          placeholder="Rep confirms refund and gives reference..."
-          onValue={setCriteriaInput}
-          onAdd={() => addChip(criteriaInput, completionCriteria, setCompletionCriteria, () => setCriteriaInput(""))}
-          onRemove={(item) => setCompletionCriteria(completionCriteria.filter((criterion) => criterion !== item))}
-        />
-      </div>
-
-      <div className="deploy-card outcome-card">
-        <div className="panel-head">
-          <span className="section-tag">Launch</span>
-          <h3>{bill ? "Ready for call" : "Waiting for bill"}</h3>
-          <p>{bill ? "Review the extracted bill facts, add optional pressure points, then start the live agent flow." : "Upload or load a demo bill to unlock the launch sequence."}</p>
-        </div>
+        <div className="workspace-card outcome-card">
+          <div className="panel-head compact-panel-head">
+            <span className="section-tag">Launch</span>
+            <h3>{readyForLaunch ? "Ready for the phone." : bill ? "Add the mission." : "Waiting for evidence."}</h3>
+            <p>{readyForLaunch ? "The backend will build the user-directed plan, dial your verified number, and stream the call." : bill ? "Enter the outcome, target, or completion proof so the agent knows what to pursue." : "Load sample evidence or scan a bill first."}</p>
+          </div>
 
         {bill ? (
           <div className="bill-proof">
@@ -327,7 +395,7 @@ export function UploadPanel() {
 
         {error ? <div className="error-banner">{error}</div> : null}
 
-        <button className="primary-button launch-button" disabled={!bill || starting} onClick={handleStart} type="button">
+        <button className="primary-button launch-button" disabled={!readyForLaunch || starting} onClick={handleStart} type="button">
           {starting ? "Initializing..." : "Start voice agent"}
         </button>
 
@@ -345,6 +413,7 @@ export function UploadPanel() {
             ))}
           </div>
         ) : null}
+        </div>
       </div>
     </section>
   );
@@ -391,4 +460,13 @@ function ChipEditor({ label, value, values, placeholder, onValue, onAdd, onRemov
       ) : null}
     </div>
   );
+}
+
+function parseMoneyInput(value: string): number | null {
+  const normalized = value.replace(/[^0-9.]/g, "");
+  if (!normalized) {
+    return null;
+  }
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }

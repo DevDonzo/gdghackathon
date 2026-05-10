@@ -51,6 +51,8 @@ class NegotiationCreateRequest(BaseModel):
     issueDescription: str | None = None
     desiredOutcome: str | None = None
     companyName: str | None = None
+    targetMonthly: float | None = None
+    walkAwayMonthly: float | None = None
     customerFacts: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
     completionCriteria: list[str] = Field(default_factory=list)
@@ -61,6 +63,8 @@ class CompanyLookupRequest(BaseModel):
     issueDescription: str | None = None
     desiredOutcome: str | None = None
     billId: str | None = None
+    targetMonthly: float | None = None
+    walkAwayMonthly: float | None = None
     customerFacts: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
     completionCriteria: list[str] = Field(default_factory=list)

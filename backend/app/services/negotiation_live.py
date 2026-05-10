@@ -47,6 +47,16 @@ def parse_offer_values(text: str, current_monthly: float) -> tuple[float | None,
     return monthly, credit
 
 
+def parse_bare_money_value(text: str) -> float | None:
+    normalized = _normalize_number_words(text.lower())
+    if _has_any(normalized, ["credit", "adjustment", "off", "discount", "reduction", "refund"]):
+        return None
+    matches = re.findall(r"(?:\$|\b)(\d+(?:\.\d{1,2})?)\s*(?:dollars?)?\b", normalized)
+    if len(matches) != 1:
+        return None
+    return round(float(matches[0]), 2)
+
+
 def classify_rep_utterance(text: str, negotiation: dict[str, Any]) -> str:
     if _is_support_case(negotiation):
         return classify_support_utterance(text, negotiation)
@@ -148,6 +158,12 @@ def advance_live_policy(negotiation: dict[str, Any], rep_text: str) -> dict[str,
 
     awaiting_proof = bool(state.get("awaitingProof"))
 
+    if proposed_monthly is None:
+        bare_offer = parse_bare_money_value(rep_text)
+        if bare_offer is not None and 0 < bare_offer < current:
+            proposed_monthly = bare_offer
+            rep_intent = "final_discount_offer" if bare_offer <= max(target, walkaway) else "small_discount_offer"
+
     if awaiting_proof and rep_intent == "close":
         action = "confirm_accepted_offer"
         next_node = "confirmed"
@@ -186,6 +202,7 @@ def advance_live_policy(negotiation: dict[str, Any], rep_text: str) -> dict[str,
         "accepted": accepted,
         "awaitingProof": action == "accept_offer" and not completed,
         "closing": completed,
+        "lastAction": action,
     }
     ai_text = phrase_live_action(action, negotiation, proposed_monthly, best_offer, best_credit)
 
@@ -305,15 +322,19 @@ def phrase_live_action(
     target = float(negotiation["targetMonthly"])
     walkaway = float(negotiation["walkAwayMonthly"])
     current = float(negotiation["currentMonthly"])
+    state = negotiation.get("liveState") or {}
+    repeated_counter = int(state.get("counterCount", 0)) > 0
 
     lines = {
         "push_for_retention": (
-            f"I understand. Can you check loyalty or retention pricing? "
-            f"${current:.2f} a month is too high for this plan."
+            "I understand. Can you check loyalty or retention pricing?"
+            if state.get("lastAction") == "push_for_retention"
+            else f"I understand. Can you check loyalty or retention pricing? ${current:.2f} a month is too high for this plan."
         ),
         "counter_to_target": (
-            f"That's better, but it still leaves the bill high. If you can do ${target:.2f} a month, "
-            "we can settle it on this call."
+            "That's still higher than the customer can justify. Is there a better retention rate you can approve today?"
+            if repeated_counter
+            else f"That's better, but it still leaves the bill high. If you can do ${target:.2f} a month, we can settle it on this call."
         ),
         "ask_for_credit_plus_rate_relief": (
             f"I appreciate the credit. The monthly charge is still the real issue. "

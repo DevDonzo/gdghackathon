@@ -208,6 +208,21 @@ async def negotiations_collection(request: Request, limit: int = 8) -> JSONRespo
         raise HTTPException(status_code=404, detail="Bill not found.")
 
     custom_angles = [item.strip() for item in create_request.customAngles if item.strip()][:4]
+    has_user_mission = any(
+        [
+            custom_angles,
+            (create_request.issueDescription or "").strip(),
+            (create_request.desiredOutcome or "").strip(),
+            create_request.targetMonthly is not None,
+            create_request.walkAwayMonthly is not None,
+            create_request.customerFacts,
+            create_request.constraints,
+            create_request.completionCriteria,
+        ]
+    )
+    if not has_user_mission:
+        raise HTTPException(status_code=400, detail="Add an issue, desired outcome, target, or completion proof before creating a voice mission.")
+
     negotiation_bill = dict(bill)
     if custom_angles:
         existing_angles = list(bill.get("negotiationAngles", []))
@@ -215,7 +230,12 @@ async def negotiations_collection(request: Request, limit: int = 8) -> JSONRespo
 
     issue_context = build_issue_context(negotiation_bill, create_request)
     issue_context["contactLookup"] = lookup_company_contact(issue_context)
-    document = create_negotiation_document(negotiation_bill, issue_context=issue_context)
+    document = create_negotiation_document(
+        negotiation_bill,
+        issue_context=issue_context,
+        target_monthly=create_request.targetMonthly,
+        walk_away_monthly=create_request.walkAwayMonthly,
+    )
     document["customAngles"] = custom_angles
     inserted = collections["negotiations"].insert_one(document)
     stored = collections["negotiations"].find_one({"_id": inserted.inserted_id})

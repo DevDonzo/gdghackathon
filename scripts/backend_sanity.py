@@ -48,7 +48,20 @@ def main() -> int:
         bill = expect_status(f"/api/bills/demo/{first_demo['id']}", 200, method="POST")
         print("bill id:", bill["id"])
 
-        negotiation = expect_status("/api/negotiations", 200, method="POST", payload={"billId": bill["id"]})
+        missing_mission = expect_status("/api/negotiations", 400, method="POST", payload={"billId": bill["id"]})
+        print("missing mission:", missing_mission)
+
+        negotiation = expect_status(
+            "/api/negotiations",
+            200,
+            method="POST",
+            payload={
+                "billId": bill["id"],
+                "desiredOutcome": "Lower the monthly bill to the customer-approved target.",
+                "targetMonthly": 52,
+                "walkAwayMonthly": 58,
+            },
+        )
         print("negotiation id:", negotiation["id"])
 
         first_start = expect_status(f"/api/negotiations/{negotiation['id']}/start", 200, method="POST")

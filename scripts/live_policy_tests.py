@@ -14,7 +14,14 @@ from backend.app.core.config import get_settings
 from backend.app.services.extraction import DEMO_BILLS
 from backend.app.services.issue_context import build_issue_context
 from backend.app.services.negotiation import create_negotiation_document
-from backend.app.services.negotiation_live import advance_live_policy, classify_rep_utterance, classify_support_utterance, opening_live_turn, parse_offer_values
+from backend.app.services.negotiation_live import (
+    advance_live_policy,
+    classify_rep_utterance,
+    classify_support_utterance,
+    opening_live_turn,
+    parse_bare_money_value,
+    parse_offer_values,
+)
 from backend.app.services.twilio_voice import conversation_relay_twiml
 
 
@@ -66,6 +73,8 @@ def main() -> int:
     monthly, credit = parse_offer_values("I can offer ten dollars off and a twenty-five dollar credit.", negotiation["currentMonthly"])
     assert_equal(monthly, 75.0, "discount parsing")
     assert_equal(credit, 25.0, "word-number credit parsing")
+    assert_equal(parse_bare_money_value("I can do ten dollars."), 10.0, "bare money parsing")
+    assert_equal(parse_bare_money_value("I can do ten dollars off."), None, "bare money ignores discounts")
 
     assert_equal(classify_rep_utterance("I do not see any promotions available.", negotiation), "refusal", "refusal intent")
     assert_equal(classify_rep_utterance("I can add a 25 dollar credit.", negotiation), "credit_offer", "credit intent")
@@ -80,6 +89,15 @@ def main() -> int:
     assert_equal(second["repIntent"], "small_discount_offer", "small offer intent")
     assert_equal(second["action"], "counter_to_target", "small offer action")
     assert_equal(second["proposedMonthly"], 70.0, "small offer monthly value")
+    assert_true("$52.00" in second["text"], "first counter can state target")
+
+    repeat = advance_live_policy({**negotiation, "liveState": second["nextState"]}, "I can reduce it to 68 dollars a month.")
+    assert_equal(repeat["action"], "counter_to_target", "repeat counter action")
+    assert_true("$52.00" not in repeat["text"], "repeat counter does not keep restating target")
+
+    generous = advance_live_policy(negotiation, "I can do ten dollars.")
+    assert_equal(generous["action"], "accept_offer", "very low bare offer should be accepted")
+    assert_equal(generous["proposedMonthly"], 10.0, "very low bare offer value")
 
     final = advance_live_policy({**negotiation, "liveState": second["nextState"]}, "I can get approval for 52 dollars a month and a 25 dollar credit.")
     assert_equal(final["repIntent"], "final_discount_offer", "final intent")
