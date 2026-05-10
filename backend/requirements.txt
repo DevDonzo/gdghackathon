@@ -1,8 +1,8 @@
 fastapi>=0.115.0
 google-genai>=1.15.0
+google-adk>=1.0.0
 pydantic-settings>=2.8.0
 pymongo>=4.10.0
 python-multipart>=0.0.20
-strands-agents[gemini]>=1.0.0
 twilio>=9.3.0
 uvicorn[standard]>=0.34.0

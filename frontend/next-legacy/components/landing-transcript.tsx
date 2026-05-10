@@ -23,29 +23,22 @@ const TURNS = [
 
 export function LandingTranscript() {
   return (
-    <div className="card" style={{ background: 'var(--bg-subtle)' }}>
-      <div className="demo-frame-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <span className="section-tag">Sandbox transcript</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.7rem', fontFamily: 'var(--font-mono)', color: 'var(--foreground-muted)' }}>
-          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--error)' }} />
-          LIVE FLOW
+    <div className="transcript-panel">
+      <div className="demo-frame-header">
+        <span className="section-tag">TRANSCRIPT_PREVIEW</span>
+        <div className="live-flow">
+          <span />
+          LIVE_FLOW
         </div>
       </div>
-      <div className="transcript-stream" style={{ gap: '12px' }}>
+      <div className="transcript-stream">
         {TURNS.map((turn, index) => (
-          <article
-            className={`transcript-card role-${turn.role}`}
-            key={`${turn.role}-${index}`}
-            style={{
-              padding: '12px',
-              fontSize: '0.85rem',
-              animation: `fadeIn 600ms cubic-bezier(0.2, 0, 0, 1) ${index * 150}ms both`
-            }}
-          >
-            <div className="transcript-head" style={{ marginBottom: '4px' }}>
-              <strong>{turn.role === "negotiator" ? "RateDrop" : "Carrier rep"}</strong>
+          <article className={`transcript-card role-${turn.role}`} key={`${turn.role}-${index}`}>
+            <div className="transcript-head">
+              <strong>{turn.role === "negotiator" ? "RATEDROP" : "CARRIER_REP"}</strong>
+              <small>{turn.objective}</small>
             </div>
-            <p style={{ opacity: 0.9 }}>{turn.text}</p>
+            <p>{turn.text}</p>
           </article>
         ))}
       </div>

@@ -1,0 +1,29 @@
+{
+  "name": "@ratedrop/agent",
+  "version": "0.1.0",
+  "description": "Client SDK for launching RateDrop voice agent runs against a RateDrop backend.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  },
+  "keywords": [
+    "ratedrop",
+    "voice-agent",
+    "google-adk",
+    "gemini",
+    "gcp",
+    "twilio"
+  ],
+  "license": "MIT"
+}

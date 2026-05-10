@@ -8,7 +8,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from backend.app.agent.negotiator_agent import (
     _clean_agent_result_text,
-    _make_model,
     _unauthorized_money_values,
     run_negotiator_agent,
 )
@@ -97,39 +96,20 @@ def test_disabled_conversation_relay_path_uses_deterministic_policy() -> None:
     assert decision["accepted"] is True
 
 
-def test_default_agent_mode_is_strands() -> None:
+def test_default_agent_mode_is_google_adk() -> None:
     settings = get_settings()
     original_mode = settings.agent_mode
-    settings.agent_mode = "strands"
+    settings.agent_mode = "adk"
     try:
-        assert settings.normalized_agent_mode == "strands"
+        assert settings.normalized_agent_mode == "adk"
     finally:
         settings.agent_mode = original_mode
 
 
-def test_default_agent_model_is_bedrock_nova_micro() -> None:
+def test_default_agent_model_is_gemini_for_google_adk() -> None:
     settings = get_settings()
-    assert settings.normalized_agent_model_provider == "bedrock"
-    assert settings.agent_model_id == "amazon.nova-lite-v1:0"
-    assert settings.agent_fallback_model_id == "amazon.nova-micro-v1:0"
-    assert settings.agent_aws_region == "us-east-1"
-
-
-def test_make_model_can_build_bedrock_model() -> None:
-    settings = get_settings()
-    original_provider = settings.agent_model_provider
-    settings.agent_model_provider = "bedrock"
-    try:
-        model = _make_model()
-    finally:
-        settings.agent_model_provider = original_provider
-
-    assert model.config["model_id"] == "amazon.nova-lite-v1:0"
-
-
-def test_make_model_can_build_bedrock_fallback_model() -> None:
-    model = _make_model(bedrock_model_id="amazon.nova-micro-v1:0")
-    assert model.config["model_id"] == "amazon.nova-micro-v1:0"
+    assert settings.normalized_agent_model_provider == "gemini"
+    assert settings.gemini_model
 
 
 def test_telecom_agent_text_rejects_unauthorized_money() -> None:
@@ -177,10 +157,8 @@ if __name__ == "__main__":
     test_agent_falls_back_when_configured_model_is_unavailable()
     test_support_fallback_uses_support_phrasing()
     test_disabled_conversation_relay_path_uses_deterministic_policy()
-    test_default_agent_mode_is_strands()
-    test_default_agent_model_is_bedrock_nova_micro()
-    test_make_model_can_build_bedrock_model()
-    test_make_model_can_build_bedrock_fallback_model()
+    test_default_agent_mode_is_google_adk()
+    test_default_agent_model_is_gemini_for_google_adk()
     test_telecom_agent_text_rejects_unauthorized_money()
     test_counter_to_target_rejects_walkaway_counter()
     test_agent_result_text_cleanup_removes_thinking()

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 
 import { eventsUrl, fetchNegotiation, fetchTranscript, money } from "@/lib/api";
 import { Negotiation, TranscriptTurn } from "@/lib/types";
@@ -26,6 +27,9 @@ export function CallDashboard({ negotiationId }: Props) {
     }
     if (negotiation.status === "completed" && negotiation.call.status !== "failed") {
       return "completed";
+    }
+    if (negotiation.call.mode === "conversation_relay") {
+      return negotiation.call.status === "not-started" ? "connecting live relay" : negotiation.call.status.replace("-", " ");
     }
     return negotiation.call.mode === "sandbox" ? negotiation.call.status : "simulation running";
   }, [negotiation]);
@@ -133,161 +137,117 @@ export function CallDashboard({ negotiationId }: Props) {
   }
 
   return (
-    <main className="page-shell">
-      <header className="subpage-topbar">
-        <Link className="brand-lockup" href="/">
-          <div className="brand-mark">R</div>
-          <div>
-            <strong>RateDrop</strong>
-            <small>Voice Sandbox</small>
-          </div>
+    <main className="bg-white text-black min-h-screen">
+      <nav className="p-8 flex justify-between items-center bg-white/80 backdrop-blur-md border-b border-black/5 sticky top-0 z-50">
+        <Link className="flex items-center gap-4" href="/">
+          <div className="w-8 h-8 bg-black text-white flex items-center justify-center font-black">R</div>
+          <span className="mono font-bold tracking-tight">AGENT_INTERFACE</span>
         </Link>
-        <div className="topbar-status">
-          <span className="status-dot" />
-          Live Transcript Active
+        <div className="badge">
+          <div className="status-dot" />
+          <span className="mono text-[10px]">
+            {negotiation.call.mode === "conversation_relay" ? "LIVE_REP_MODE" : "VOICE_SANDBOX_ACTIVE"}
+          </span>
         </div>
-      </header>
+      </nav>
 
-      <section className="call-layout">
-        <div className="call-stage card">
-          <div className="call-stage-header">
-            <div>
-              <span className="section-tag">Sandbox Stream</span>
-              <h2>{pageTitle}</h2>
-            </div>
-            <div className={`status-pill status-${negotiation.status}`}>{negotiation.status.replace("-", " ")}</div>
-          </div>
-
-          <div className="progress-block">
-            <div className="progress-meta">
-              <strong>{turns.length} Turns Captured</strong>
-              <span>{progress}% Path Complete</span>
-            </div>
-            <div className="progress-track" aria-hidden="true">
-              <span style={{ width: `${progress}%` }} />
+      <section className="section grid lg:grid-cols-[1.5fr_1fr] gap-24 items-start">
+        <div className="fade-in">
+          <div className="mb-16">
+            <span className="mono text-accent mb-4 block font-bold">Negotiation_Live_Log</span>
+            <h2 className="text-5xl font-black italic tracking-tighter">{pageTitle.toUpperCase()}</h2>
+            <div className="flex gap-4 mt-8">
+               <div className="badge">STATUS: {displayCallStatus.toUpperCase()}</div>
+               <div className="badge">ENGINE: DETERMINISTIC</div>
             </div>
           </div>
 
-          <div className="call-meta-grid">
-            <div className="stat-card">
-              <span>Objective</span>
-              <strong>{negotiation.currentObjective}</strong>
-            </div>
-            <div className="stat-card">
-              <span>Best Offer</span>
-              <strong>{negotiation.bestOfferMonthly ? `${money(negotiation.bestOfferMonthly)}/mo` : "Pending"}</strong>
-            </div>
-          </div>
-
-          {negotiation.status === "in-progress" && !negotiation.call.error ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', background: 'var(--bg-subtle)', borderRadius: '8px', marginBottom: '32px' }}>
-              <div className="voice-wave" aria-hidden="true">
-                {[0, 1, 2, 3, 4, 5, 6].map((index) => (
-                  <span className="voice-wave-bar" key={`left-${index}`} />
-                ))}
+          <div className="p-12 border border-black/5 bg-gray-50/50 mb-16 shadow-sm">
+            <div className="flex justify-between items-end mb-8">
+              <div>
+                <span className="mono text-muted text-[10px] block mb-2">Protocol_Progress</span>
+                <strong className="text-4xl font-black italic">{progress}%</strong>
               </div>
-              <span style={{ fontSize: '0.85rem', fontWeight: '600', letterSpacing: '0.05em' }}>NEGOTIATION ACTIVE</span>
+              <div className="text-right">
+                <span className="mono text-muted text-[10px] block mb-2">Turns_Captured</span>
+                <strong className="text-4xl font-black italic">{turns.length}</strong>
+              </div>
             </div>
-          ) : null}
+            <div className="w-full h-1 bg-black/5 rounded-full overflow-hidden">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${progress}%` }}
+                className="h-full bg-accent shadow-[0_0_10px_var(--accent)]"
+              />
+            </div>
+          </div>
 
-          <div className="transcript-stream">
-            {turns.length === 0 ? (
-              <div className="empty-state">Dialing...</div>
-            ) : null}
-            {turns.map((turn, index) => (
-              <article
-                className={`transcript-card role-${turn.role}`}
-                key={`${turn.createdAt}-${index}`}
-                style={{ animation: 'fadeIn 500ms cubic-bezier(0.2, 0, 0, 1) both' }}
+          <div className="grid grid-cols-2 gap-4 mb-16">
+            <div className="p-8 border border-black/5 bg-white shadow-sm">
+              <span className="mono text-muted text-[10px] block mb-2">Current_Objective</span>
+              <strong className="text-lg font-bold">{negotiation.currentObjective}</strong>
+            </div>
+            <div className="p-8 border border-black/5 bg-white shadow-sm">
+              <span className="mono text-muted text-[10px] block mb-2">Best_Offer_Captured</span>
+              <strong className="text-lg font-bold text-accent">{negotiation.bestOfferMonthly ? `${money(negotiation.bestOfferMonthly)}/mo` : "ANALYZING..."}</strong>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-6">
+            {turns.length === 0 && (
+              <div className="p-16 border border-dashed border-black/10 text-center mono text-muted italic">
+                {negotiation.call.mode === "conversation_relay"
+                  ? "Answer the phone and speak as the company support rep."
+                  : "Awaiting carrier response..."}
+              </div>
+            )}
+            {turns.map((turn, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`p-10 border-l-4 ${turn.role === 'negotiator' ? 'border-accent bg-accent-soft' : 'border-black/5 bg-gray-50/30'}`}
               >
-                <div className="transcript-head">
-                  <strong>{turn.role === "negotiator" ? "RateDrop" : "Carrier Rep"}</strong>
-                  <span>{turn.intent.replaceAll("_", " ")}</span>
+                <div className="flex justify-between items-center mb-4">
+                  <span className="mono font-black text-xs">
+                    {turn.role === 'negotiator' ? 'AGENT_RD' : 'PROVIDER_REP'}
+                  </span>
+                  <span className="mono text-muted text-[10px] font-bold">{turn.intent.toUpperCase()}</span>
                 </div>
-                <p>{turn.text}</p>
-                {turn.proposedMonthly || turn.credit ? (
-                  <div style={{ marginTop: '12px', padding: '8px', background: 'var(--bg)', borderRadius: '4px', fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }}>
-                    {turn.proposedMonthly ? <div>Offer: {money(turn.proposedMonthly)}/mo</div> : null}
-                    {turn.credit ? <div>Credit: {money(turn.credit)}</div> : null}
+                <p className="text-xl leading-relaxed text-carbon font-medium">{turn.text}</p>
+                {(turn.proposedMonthly || turn.credit) && (
+                  <div className="mt-8 pt-6 border-t border-black/5 flex gap-8">
+                     {turn.proposedMonthly && <div><span className="mono text-[10px] block text-muted">OFFER</span><strong className="text-sm">{money(turn.proposedMonthly)}/mo</strong></div>}
+                     {turn.credit && <div><span className="mono text-[10px] block text-muted">CREDIT</span><strong className="text-sm">{money(turn.credit)}</strong></div>}
                   </div>
-                ) : null}
-              </article>
+                )}
+              </motion.div>
             ))}
           </div>
         </div>
 
-        <aside className="sidebar-stack">
-          {negotiation.issueContext ? (
-            <div className="card sidebar-panel" style={{ background: 'var(--bg-subtle)' }}>
-              <span className="section-tag">Issue Context</span>
-              <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>{negotiation.issueContext.companyName}</h3>
-              <div style={{ display: 'grid', gap: '20px' }}>
-                <div>
-                  <label className="intel-label">Task Type</label>
-                  <strong style={{ fontSize: '0.85rem' }}>{negotiation.issueContext.taskType.replaceAll("_", " ")}</strong>
+        <aside className="sticky top-40 flex flex-col gap-8">
+           <div className="p-10 border border-black/5 bg-white shadow-xl">
+              <span className="section-tag mb-6">Target_Parameters</span>
+              <h3 className="text-2xl font-black italic mb-8">{negotiation.scenarioLabel.toUpperCase()}</h3>
+              <div className="flex flex-col gap-8">
+                <div className="p-6 bg-gray-50 border border-black/5">
+                  <span className="mono text-muted text-[10px] block mb-1 font-bold">CURRENT_MONTHLY</span>
+                  <strong className="text-3xl font-black italic">{money(negotiation.currentMonthly)}</strong>
                 </div>
-                <div>
-                  <label className="intel-label">Problem</label>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--foreground-muted)' }}>{negotiation.issueContext.problemSummary}</p>
-                </div>
-                <div>
-                  <label className="intel-label">Desired Outcome</label>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--foreground-muted)' }}>{negotiation.issueContext.desiredOutcome}</p>
-                </div>
-                {negotiation.issueContext.completionCriteria.length > 0 && (
-                  <div>
-                    <label className="intel-label">Success Criteria</label>
-                    <ul style={{ listStyle: 'none', padding: 0, marginTop: '8px', display: 'grid', gap: '8px' }}>
-                      {negotiation.issueContext.completionCriteria.map((c, i) => (
-                        <li key={i} style={{ fontSize: '0.8rem', color: 'var(--foreground-muted)', display: 'flex', gap: '8px' }}>
-                          <span style={{ color: 'var(--success)' }}>•</span> {c}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="card sidebar-panel" style={{ background: 'var(--bg-subtle)' }}>
-              <span className="section-tag">Scenario</span>
-              <h3>{negotiation.scenarioLabel}</h3>
-              <div className="sidebar-stats">
-                <div>
-                  <span>Current Bill</span>
-                  <strong>{money(negotiation.currentMonthly)}</strong>
-                </div>
-                <div>
-                  <span>Target</span>
-                  <strong>{money(negotiation.targetMonthly)}</strong>
+                <div className="p-6 bg-accent-soft border border-accent/20">
+                  <span className="mono text-accent text-[10px] block mb-1 font-bold">NEGOTIATION_TARGET</span>
+                  <strong className="text-3xl font-black italic">{money(negotiation.targetMonthly)}</strong>
                 </div>
               </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--foreground-muted)', marginTop: '16px' }}>
-                Deterministic path selected based on extracted bill facts.
-              </p>
-            </div>
-          )}
+           </div>
 
-          <div className="card sidebar-panel" style={{ border: '1px solid var(--paper-border)' }}>
-            <span className="section-tag">Session Info</span>
-            <div className="sidebar-stats">
-              <div>
-                <span>Duration</span>
-                <strong>Live</strong>
-              </div>
-              <div>
-                <span>Mode</span>
-                <strong>{negotiation.call.mode}</strong>
-              </div>
-            </div>
-            {negotiation.status === "completed" ? (
-              <Link className="primary-button" href={`/result/${negotiation.id}`}>
-                View Results
-              </Link>
-            ) : null}
-          </div>
+           {negotiation.status === "completed" && (
+             <Link className="primary-button h-20 text-lg shadow-2xl" href={`/result/${negotiation.id}`}>
+               PROCEED_TO_FINAL_PROOF
+             </Link>
+           )}
         </aside>
       </section>
     </main>
-  );
-}
+  );}

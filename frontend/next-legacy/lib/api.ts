@@ -78,7 +78,10 @@ export async function fetchRecentNegotiations(limit = 6): Promise<Negotiation[]>
 
 export async function startNegotiation(negotiationId: string): Promise<Negotiation> {
   const response = await fetch(`${API_BASE}/api/negotiations/${negotiationId}/start`, {
-    method: "POST"
+    method: "POST",
+    headers: {
+      "x-ratedrop-call-mode": "conversation_relay"
+    }
   });
   return handle<Negotiation>(response);
 }

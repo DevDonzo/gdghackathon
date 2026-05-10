@@ -4,14 +4,12 @@ import asyncio
 import mimetypes
 import json
 import logging
-from pathlib import Path
 from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import ValidationError
 from pymongo import ReturnDocument
 
@@ -37,8 +35,6 @@ from backend.app.services.twilio_voice import launch_sandbox_call, negotiation_t
 
 app = FastAPI(title="RateDrop API", version="0.1.0")
 settings = get_settings()
-STATIC_DIR = Path(__file__).resolve().parents[2] / "frontend" / "static"
-INDEX_FILE = STATIC_DIR / "index.html"
 logger = logging.getLogger(__name__)
 
 app.add_middleware(
@@ -46,14 +42,14 @@ app.add_middleware(
     allow_origins=[
         "http://127.0.0.1:3000",
         "http://localhost:3000",
+        "http://127.0.0.1:3001",
+        "http://localhost:3001",
         settings.frontend_base_url,
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.on_event("startup")
@@ -94,11 +90,9 @@ def readiness(request: Request) -> JSONResponse:
             "gemini": {"configured": bool(settings.gemini_api_key), "model": settings.gemini_model},
             "agent": {
                 "mode": settings.normalized_agent_mode,
-                "provider": "strands",
+                "provider": "google-adk" if settings.normalized_agent_mode == "adk" else settings.normalized_agent_mode,
                 "modelProvider": settings.normalized_agent_model_provider,
-                "modelId": settings.agent_model_id,
-                "fallbackModelId": settings.agent_fallback_model_id if settings.normalized_agent_model_provider == "bedrock" else None,
-                "region": settings.agent_aws_region if settings.normalized_agent_model_provider == "bedrock" else None,
+                "modelId": settings.gemini_model,
             },
             "tavily": {"configured": bool(settings.tavily_api_key)},
             "twilio": twilio_readiness(request),
@@ -408,15 +402,12 @@ async def twilio_conversation_relay_complete(negotiation_id: str, request: Reque
 
 
 @app.get("/")
-def frontend_home() -> FileResponse:
-    return FileResponse(INDEX_FILE)
-
-
-@app.get("/call/{negotiation_id}")
-def frontend_call(negotiation_id: str) -> FileResponse:
-    return FileResponse(INDEX_FILE)
-
-
-@app.get("/result/{negotiation_id}")
-def frontend_result(negotiation_id: str) -> FileResponse:
-    return FileResponse(INDEX_FILE)
+def api_home() -> JSONResponse:
+    return JSONResponse(
+        {
+            "name": "RateDrop API",
+            "status": "ok",
+            "frontend": settings.frontend_base_url,
+            "docs": "/docs",
+        }
+    )

@@ -84,9 +84,15 @@ def main() -> int:
     final = advance_live_policy({**negotiation, "liveState": second["nextState"]}, "I can get approval for 52 dollars a month and a 25 dollar credit.")
     assert_equal(final["repIntent"], "final_discount_offer", "final intent")
     assert_equal(final["action"], "accept_offer", "final action")
-    assert_true(final["completed"], "acceptable offer completes")
+    assert_true(not final["completed"], "acceptable offer requests proof before completion")
     assert_equal(final["proposedMonthly"], 52.0, "final monthly value")
     assert_equal(final["credit"], 25.0, "final credit value")
+    confirmed = advance_live_policy(
+        {**negotiation, "bestOfferMonthly": final["bestOfferMonthly"], "oneTimeCredit": final["bestCredit"], "liveState": final["nextState"]},
+        "Confirmed, it starts next billing cycle and it is noted on the account.",
+    )
+    assert_equal(confirmed["action"], "confirm_accepted_offer", "confirmation action")
+    assert_true(confirmed["completed"], "proof confirmation completes")
 
     twiml = conversation_relay_twiml(
         negotiation,
@@ -107,20 +113,22 @@ def main() -> int:
         with client.websocket_connect(f"/ws/conversation-relay/{inserted.inserted_id}") as websocket:
             opening = websocket.receive_json()
             assert_equal(opening["type"], "text", "websocket opening type")
-            assert_true("retention review" in opening["token"], "websocket opening line")
+            assert_true("retention" in opening["token"].lower(), "websocket opening line")
             websocket.send_json({"type": "setup", "callSid": "CA_TEST", "sessionId": "VX_TEST"})
             websocket.send_json({"type": "prompt", "voicePrompt": "I can get approval for 52 dollars a month and a 25 dollar credit.", "last": True})
             reply = websocket.receive_json()
-            ended = websocket.receive_json()
             assert_equal(reply["type"], "text", "websocket reply type")
-            assert_equal(ended["type"], "end", "websocket end type")
+            assert_true("confirm" in reply["token"].lower(), "websocket asks for confirmation proof")
+            websocket.send_json({"type": "prompt", "voicePrompt": "Confirmed, it starts next billing cycle and it is noted on the account.", "last": True})
+            proof_reply = websocket.receive_json()
+            assert_equal(proof_reply["type"], "text", "websocket proof reply type")
 
     stored = collections["negotiations"].find_one({"_id": inserted.inserted_id})
     transcript_count = collections["turns"].count_documents({"negotiationId": inserted.inserted_id})
     assert_equal(stored["status"], "completed", "websocket negotiation completion")
     assert_equal(stored["bestOfferMonthly"], 52.0, "websocket best offer")
     assert_equal(stored["oneTimeCredit"], 25.0, "websocket credit")
-    assert_equal(transcript_count, 3, "websocket transcript count")
+    assert_equal(transcript_count, 5, "websocket transcript count")
 
     multi_doc = negotiation_fixture()
     multi_doc["call"] = {"status": "queued", "mode": "conversation_relay"}
@@ -129,7 +137,7 @@ def main() -> int:
     with TestClient(app) as client:
         with client.websocket_connect(f"/ws/conversation-relay/{multi_inserted.inserted_id}") as websocket:
             opening = websocket.receive_json()
-            assert_true("retention review" in opening["token"], "multi-turn opening line")
+            assert_true("retention" in opening["token"].lower(), "multi-turn opening line")
             websocket.send_json({"type": "setup", "callSid": "CA_MULTI", "sessionId": "VX_MULTI"})
 
             websocket.send_json({"type": "prompt", "voicePrompt": "Thanks for calling Bell, how can I help?", "last": True})
@@ -147,20 +155,22 @@ def main() -> int:
 
             websocket.send_json({"type": "prompt", "voicePrompt": "I can add a 25 dollar credit.", "last": True})
             credit_reply = drain_text_or_end(websocket)[-1]
-            assert_true("recurring charge" in credit_reply["token"].lower(), "credit-only reply asks for recurring relief")
+            assert_true("monthly charge" in credit_reply["token"].lower(), "credit-only reply asks for recurring relief")
 
             websocket.send_json({"type": "prompt", "voicePrompt": "I can get approval for 52 dollars a month and a 25 dollar credit.", "last": True})
             final_reply = websocket.receive_json()
-            ended = websocket.receive_json()
             assert_equal(final_reply["type"], "text", "multi-turn final reply type")
-            assert_equal(ended["type"], "end", "multi-turn end type")
+            assert_true("confirm" in final_reply["token"].lower(), "multi-turn final asks for proof")
+            websocket.send_json({"type": "prompt", "voicePrompt": "Confirmed, it starts next billing cycle and it is noted on the account.", "last": True})
+            proof_reply = websocket.receive_json()
+            assert_equal(proof_reply["type"], "text", "multi-turn proof reply type")
 
     multi_stored = collections["negotiations"].find_one({"_id": multi_inserted.inserted_id})
     multi_transcript_count = collections["turns"].count_documents({"negotiationId": multi_inserted.inserted_id})
     assert_equal(multi_stored["status"], "completed", "multi-turn websocket completion")
     assert_equal(multi_stored["bestOfferMonthly"], 52.0, "multi-turn best offer")
     assert_equal(multi_stored["oneTimeCredit"], 25.0, "multi-turn credit")
-    assert_equal(multi_transcript_count, 11, "multi-turn transcript count")
+    assert_equal(multi_transcript_count, 13, "multi-turn transcript count")
 
     air_bill = dict(DEMO_BILLS["bell_promo_push"])
     air_bill["_id"] = ObjectId()
@@ -202,10 +212,8 @@ def main() -> int:
 
             websocket.send_json({"type": "prompt", "voicePrompt": "I processed the refund and your case number is AC123.", "last": True})
             support_done = websocket.receive_json()
-            support_end = websocket.receive_json()
             assert_equal(support_done["type"], "text", "support final reply type")
             assert_true("Perfect" in support_done["token"], "support final reply is conversational")
-            assert_equal(support_end["type"], "end", "support end type")
 
     support_stored = collections["negotiations"].find_one({"_id": support_inserted.inserted_id})
     support_transcript_count = collections["turns"].count_documents({"negotiationId": support_inserted.inserted_id})

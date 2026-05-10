@@ -9,73 +9,40 @@ Do not add ASSIST references to UI copy, docs, comments, or commit messages.
 
 RateDrop is a hackathon MVP that:
 
-1. Accepts a telecom bill PDF or image
-2. Extracts structured bill facts
-3. Builds a deterministic negotiation plan
-4. Starts a sandbox Twilio voice flow
-5. Streams transcript updates in the UI
-6. Persists bill, negotiation, and transcript state in MongoDB
-7. Shows a deterministic savings result page
+1. Accepts a bill PDF/image or demo bill
+2. Captures the support problem and desired outcome
+3. Extracts structured bill facts
+4. Builds a deterministic phone mission
+5. Starts a Twilio voice flow
+6. Routes live rep utterances through a Google ADK-backed agent when enabled
+7. Streams transcript updates in the UI
+8. Shows deterministic result math and outcome proof
 
 ## Current Architecture
 
-- Frontend: static HTML, CSS, and JS in `frontend/static/`
-- Legacy frontend reference: prior Next.js code in `frontend/next-legacy/`
+- Frontend: Next.js 15 in `frontend/next-legacy/`
 - Backend: FastAPI in `backend/app/`
-- Database: MongoDB Atlas
-- Model: Gemini 2.5 Flash
-- Voice: Twilio Programmable Voice
-
-## Repo Layout
-
-- `frontend/static/`: active product frontend served by FastAPI
-- `frontend/next-legacy/`: archived Next.js implementation and component reference
-- `backend/app/main.py`: FastAPI routes
-- `backend/app/services/extraction.py`: Gemini extraction and demo fixtures
-- `backend/app/services/negotiation.py`: deterministic negotiation engine
-- `backend/app/services/twilio_voice.py`: Twilio outbound call and callbacks
-- `backend/app/db/mongo.py`: Mongo client and indexes
-- `scripts/smoke_mvp.py`: happy-path smoke test
-- `scripts/backend_sanity.py`: backend validation and edge-case check
+- Storage: local JSON by default, MongoDB optional
+- Extraction: Gemini when configured, demo fixtures otherwise
+- Agent: Google ADK-backed negotiator in `backend/app/agent/`
+- Default model provider: Gemini
+- Voice: Twilio Programmable Voice and ConversationRelay-ready routes
+- SDK package: `packages/ratedrop-agent/`
 
 ## Non-Negotiable Product Constraints
 
 - Keep the product consumer-facing and standalone
 - Do not rely on pure LLM improvisation for negotiation logic
-- Use Gemini for extraction and phrasing only
 - Keep final math deterministic and code-driven
 - Prefer a reliable demo path over extra features
-- Do not break the existing API contracts unless the whole stack is updated together
+- Do not break existing API contracts unless the whole stack is updated together
+- Do not describe the system as production-grade
 
 ## Backend Ownership
 
-Backend owns:
+Backend owns request validation, bill extraction, issue context building, scenario selection, deterministic policy, transcript persistence, SSE publishing, Twilio callbacks, Google ADK routing, and storage document shapes.
 
-- request validation
-- bill extraction
-- scenario selection
-- negotiation turn plan
-- deterministic savings math
-- transcript persistence
-- SSE event publishing
-- Twilio call start and callback handling
-- MongoDB document shapes
-
-Frontend should not reimplement or override backend logic.
-
-## Frontend Ownership
-
-Frontend owns:
-
-- page layout
-- visual hierarchy
-- styling
-- interaction polish
-- loading, empty, and error states
-- mobile responsiveness
-- rendering backend data clearly
-
-Frontend should consume the existing API and type contracts rather than inventing new ones.
+Frontend owns layout, styling, interaction polish, loading/error states, mobile responsiveness, and rendering backend data clearly.
 
 ## API Contracts To Preserve
 
@@ -91,19 +58,21 @@ Frontend should consume the existing API and type contracts rather than inventin
 - `GET /api/negotiations/{id}/events`
 - `POST /twilio/voice/negotiations/{id}`
 - `POST /twilio/status/{id}`
+- `WS /ws/conversation-relay/{id}`
 
 Primary frontend contract files:
 
-- `frontend/static/app.js`
-- `frontend/static/styles.css`
-
-If these change, update the frontend and backend together.
+- `frontend/next-legacy/lib/api.ts`
+- `frontend/next-legacy/lib/types.ts`
 
 ## Local Run Commands
 
 Install:
 
 ```bash
+cd frontend/next-legacy
+npm install
+cd ../..
 python3 -m pip install -r backend/requirements.txt
 ```
 
@@ -115,92 +84,38 @@ Run backend:
 
 Run frontend:
 
-The active frontend is served by FastAPI from `frontend/static/`.
+```bash
+cd frontend/next-legacy
+npm run dev -- --port 3001
+```
 
 Open:
 
 ```text
-http://127.0.0.1:8000
+http://127.0.0.1:3001
 ```
-
-## Environment Variables
-
-Required:
-
-- `MONGODB_URI`
-- `GEMINI_API_KEY`
-- `GEMINI_MODEL`
-- `TWILIO_ACCOUNT_SID`
-- `TWILIO_AUTH_TOKEN`
-- `TWILIO_PHONE_NUMBER`
-
-Optional but important:
-
-- `TWILIO_VERIFY_ORIG_NUMBERS`
-- `TWILIO_SANDBOX_TO_NUMBER`
-- `PUBLIC_BASE_URL`
-- `FRONTEND_BASE_URL`
-- `NEXT_PUBLIC_API_BASE_URL`
-
-Behavior notes:
-
-- If `PUBLIC_BASE_URL` is missing, the backend falls back to simulated call mode
-- Twilio trial mode requires verified destination numbers
-
-## Reliability Notes
-
-The code is in good hackathon-demo shape, but there are still operational dependencies:
-
-- local backend process must stay running
-- public callback tunnel must stay alive for real Twilio callbacks
-- verified Twilio destination must be reachable
-
-Do not describe the system as production-grade.
-
-## Current Verified Behavior
-
-Verified in this repo:
-
-- frontend static shell loads cleanly
-- backend compiles cleanly
-- invalid IDs return `400`
-- malformed negotiation create payload returns `400`
-- duplicate start requests do not duplicate transcript runs
-- in-progress negotiations resume after backend restart
-- smoke path completes end-to-end
-- backend sanity script passes
-
-## Safe Change Boundaries
-
-Safe changes:
-
-- CSS and layout
-- page composition in `frontend/static/index.html`
-- interaction logic in `frontend/static/app.js`
-- copy improvements that keep RateDrop branding
-- better client-side loading and error handling
-
-Risky changes:
-
-- changing request or response assumptions in `frontend/static/app.js`
-- changing Mongo document shapes
-- changing negotiation math
-- changing SSE payloads
-- changing Twilio webhook paths
 
 ## Required Validation After Meaningful Changes
 
 For backend changes:
 
 ```bash
-python3 -m py_compile backend/app/main.py backend/app/services/negotiation.py backend/app/services/twilio_voice.py backend/app/db/mongo.py backend/app/models/schemas.py
+python3 -m py_compile backend/app/main.py backend/app/services/negotiation.py backend/app/services/twilio_voice.py backend/app/services/conversation_relay.py backend/app/db/mongo.py backend/app/models/schemas.py
 python3 scripts/backend_sanity.py
 ```
 
 For frontend changes:
 
 ```bash
-node --check frontend/static/app.js
+cd frontend/next-legacy
+npm run build
+```
+
+For SDK changes:
+
+```bash
+cd packages/ratedrop-agent
+npm run build
 ```
 
 For end-to-end checks:

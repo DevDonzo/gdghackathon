@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
+import asyncio
 from typing import Any
 
 from backend.app.core.config import get_settings
@@ -20,6 +22,7 @@ ALLOWED_ACTIONS = {
     "counter_to_target",
     "ask_for_credit_plus_rate_relief",
     "accept_offer",
+    "confirm_accepted_offer",
     "exit_without_accepting",
     "explain_support_goal",
     "provide_available_context",
@@ -47,21 +50,34 @@ Rules:
 
 
 def run_negotiator_agent(negotiation: dict[str, Any], rep_text: str) -> dict[str, Any]:
+    settings = get_settings()
+    if settings.normalized_agent_mode == "adk":
+        return _run_google_adk_negotiator_agent(negotiation, rep_text)
+    return advance_live_policy(negotiation, rep_text)
+
+
+def _run_google_adk_negotiator_agent(negotiation: dict[str, Any], rep_text: str) -> dict[str, Any]:
     """
-    Return the same decision shape as advance_live_policy(), with optional
-    agent-generated spoken text. Any agent/tool failure falls back to the
-    deterministic policy and phrase generator.
+    Run the Google Agent Development Kit agent around RateDrop's
+    deterministic policy tool. ADK handles phrasing; policy owns decisions.
     """
     pending_decision: dict[str, Any] = {}
+    settings = get_settings()
 
-    try:
-        from strands import Agent, tool
-    except Exception as error:
-        logger.warning("Strands agent unavailable; using deterministic live policy: %s", error)
+    if not settings.gemini_api_key:
+        logger.warning("Google ADK agent unavailable; GEMINI_API_KEY is missing.")
         return advance_live_policy(negotiation, rep_text)
 
-    @tool
-    def analyze_rep_speech(rep_text: str, negotiation_json: str) -> str:
+    try:
+        from google.adk.agents import Agent
+        from google.adk.runners import Runner
+        from google.adk.sessions import InMemorySessionService
+        from google.genai import types
+    except Exception as error:
+        logger.warning("Google ADK unavailable; using deterministic live policy: %s", error)
+        return advance_live_policy(negotiation, rep_text)
+
+    def analyze_rep_speech(rep_text: str, negotiation_json: str) -> dict[str, Any]:
         """
         Run RateDrop's deterministic policy engine against the rep speech.
         Call this first on every turn.
@@ -70,119 +86,126 @@ def run_negotiator_agent(negotiation: dict[str, Any], rep_text: str) -> dict[str
         decision = advance_live_policy(negotiation_payload, rep_text)
         pending_decision.clear()
         pending_decision.update(decision)
-        return json.dumps(_decision_summary(decision, negotiation_payload), default=str)
+        return _decision_summary(decision, negotiation_payload)
 
-    @tool
-    def finalize_response(action: str, spoken_text: str, completed: bool) -> str:
+    def finalize_response(action: str, spoken_text: str, completed: bool) -> dict[str, Any]:
         """
         Validate and register the final spoken response for the policy action.
         Call this as the last tool before ending.
         """
         if action not in ALLOWED_ACTIONS:
-            return f"error: unknown action '{action}'"
+            return {"status": "error", "error": f"unknown action '{action}'"}
         if pending_decision and action != pending_decision.get("action"):
-            return f"error: action must remain {pending_decision.get('action')}"
+            return {"status": "error", "error": f"action must remain {pending_decision.get('action')}"}
         clean_text = _clean_spoken_text(spoken_text)
         if not clean_text:
-            return "error: spoken_text must not be empty"
+            return {"status": "error", "error": "spoken_text must not be empty"}
         unauthorized_money = _unauthorized_money_values(clean_text, pending_decision, negotiation)
         if unauthorized_money:
-            return f"error: unauthorized monetary value(s): {', '.join(unauthorized_money)}"
+            return {"status": "error", "error": f"unauthorized monetary value(s): {', '.join(unauthorized_money)}"}
         pending_decision["_agent_text"] = clean_text
         pending_decision["_agent_completed"] = bool(completed)
-        return "approved"
+        return {"status": "approved"}
 
     try:
-        agent_result = _run_strands_turn(
-            tools=[analyze_rep_speech, finalize_response],
-            rep_text=rep_text,
-            negotiation=negotiation,
-        )
-    except Exception as error:
-        settings = get_settings()
-        fallback_model_id = settings.agent_fallback_model_id.strip()
-        can_retry_bedrock = (
-            settings.normalized_agent_model_provider == "bedrock"
-            and fallback_model_id
-            and fallback_model_id != settings.agent_model_id
-        )
-        if not can_retry_bedrock:
-            logger.warning("Strands agent turn failed; using deterministic live policy: %s", error)
-            return advance_live_policy(negotiation, rep_text)
-        logger.warning(
-            "Strands agent turn failed on %s; retrying with %s: %s",
-            settings.agent_model_id,
-            fallback_model_id,
-            error,
-        )
-        pending_decision.clear()
-        try:
-            agent_result = _run_strands_turn(
+        if not os.environ.get("GOOGLE_API_KEY"):
+            os.environ["GOOGLE_API_KEY"] = settings.gemini_api_key
+        final_text = _run_async_blocking(
+            _run_google_adk_turn_async(
+                Agent=Agent,
+                Runner=Runner,
+                InMemorySessionService=InMemorySessionService,
+                types=types,
                 tools=[analyze_rep_speech, finalize_response],
                 rep_text=rep_text,
                 negotiation=negotiation,
-                bedrock_model_id=fallback_model_id,
             )
-        except Exception as fallback_error:
-            logger.warning("Strands fallback agent turn failed; using deterministic live policy: %s", fallback_error)
-            return advance_live_policy(negotiation, rep_text)
+        )
+    except Exception as error:
+        logger.warning("Google ADK agent turn failed; using deterministic live policy: %s", error)
+        return advance_live_policy(negotiation, rep_text)
 
     if not pending_decision:
-        logger.warning("Strands agent did not call analyze_rep_speech; using deterministic live policy.")
+        logger.warning("Google ADK agent did not call analyze_rep_speech; using deterministic live policy.")
         return advance_live_policy(negotiation, rep_text)
 
     decision = dict(pending_decision)
     agent_text = decision.pop("_agent_text", None)
     decision.pop("_agent_completed", None)
-    result_text = _clean_agent_result_text(agent_result) if not agent_text else None
+    result_text = _clean_agent_result_text(final_text) if not agent_text else None
     if result_text and _unauthorized_money_values(result_text, decision, negotiation):
         result_text = None
     decision["text"] = agent_text or result_text or _fallback_phrase(decision, negotiation)
     return decision
 
 
-def _run_strands_turn(
+async def _run_google_adk_turn_async(
+    *,
+    Agent: Any,
+    Runner: Any,
+    InMemorySessionService: Any,
+    types: Any,
     tools: list[Any],
     rep_text: str,
     negotiation: dict[str, Any],
-    bedrock_model_id: str | None = None,
-) -> Any:
-    from strands import Agent
-
-    agent = Agent(
-        model=_make_model(bedrock_model_id=bedrock_model_id),
-        tools=tools,
-        system_prompt=SYSTEM_PROMPT,
-        callback_handler=None,
-    )
-    return agent(
-        "The representative just said: "
-        f"{json.dumps(rep_text)}\n\n"
-        f"Negotiation state: {json.dumps(_agent_safe_negotiation(negotiation), default=str)}"
-    )
-
-
-def _make_model(bedrock_model_id: str | None = None) -> Any:
+) -> str:
     settings = get_settings()
-    if settings.normalized_agent_model_provider == "gemini":
-        if not settings.gemini_api_key:
-            raise RuntimeError("GEMINI_API_KEY is required when RATEDROP_AGENT_MODEL_PROVIDER=gemini.")
-        from strands.models.gemini import GeminiModel
-
-        return GeminiModel(
-            client_args={"api_key": settings.gemini_api_key},
-            model_id=settings.gemini_model,
-            params={"temperature": 0.4, "max_output_tokens": 220},
-        )
-
-    from strands.models.bedrock import BedrockModel
-
-    return BedrockModel(
-        model_id=bedrock_model_id or settings.agent_model_id,
-        region_name=settings.agent_aws_region,
-        temperature=0.4,
-        max_tokens=220,
+    app_name = "ratedrop_phone_agent"
+    user_id = "phone-call"
+    session_id = f"negotiation-{str(negotiation.get('_id', 'local'))}"
+    agent = Agent(
+        model=settings.gemini_model,
+        name="ratedrop_policy_bound_phone_agent",
+        instruction=SYSTEM_PROMPT,
+        tools=tools,
     )
+    session_service = InMemorySessionService()
+    await session_service.create_session(app_name=app_name, user_id=user_id, session_id=session_id)
+    runner = Runner(agent=agent, app_name=app_name, session_service=session_service)
+    message = types.Content(
+        role="user",
+        parts=[
+            types.Part(
+                text=(
+                    "The representative just said: "
+                    f"{json.dumps(rep_text)}\n\n"
+                    f"Negotiation state: {json.dumps(_agent_safe_negotiation(negotiation), default=str)}"
+                )
+            )
+        ],
+    )
+
+    final_response = ""
+    async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=message):
+        if event.is_final_response() and event.content and event.content.parts:
+            final_response = " ".join(part.text or "" for part in event.content.parts).strip()
+    return final_response
+
+
+def _run_async_blocking(coro: Any) -> Any:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+
+    # This path is defensive. The production caller already runs this function
+    # in a worker thread, but tests or future routes may call it from a loop.
+    import threading
+
+    result: dict[str, Any] = {}
+
+    def runner() -> None:
+        try:
+            result["value"] = asyncio.run(coro)
+        except Exception as error:
+            result["error"] = error
+
+    thread = threading.Thread(target=runner, daemon=True)
+    thread.start()
+    thread.join()
+    if "error" in result:
+        raise result["error"]
+    return result.get("value")
 
 
 def _agent_safe_negotiation(negotiation: dict[str, Any]) -> dict[str, Any]:

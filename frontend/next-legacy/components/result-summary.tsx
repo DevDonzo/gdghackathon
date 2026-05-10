@@ -67,10 +67,10 @@ export function ResultSummary({ negotiationId }: Props) {
 
       setDisplayMonthly(to);
       confetti({
-        particleCount: 110,
-        spread: 70,
-        origin: { y: 0.38 },
-        colors: ["#cf6430", "#9b451c", "#12233d", "#2e7f67", "#fffaf2"]
+        particleCount: 82,
+        spread: 58,
+        origin: { y: 0.32 },
+        colors: ["#050505", "#3b3b37", "#77776f", "#fbfbf8", "#ffffff"]
       });
       window.setTimeout(() => setSavingsVisible(true), 280);
     }
@@ -105,118 +105,139 @@ export function ResultSummary({ negotiationId }: Props) {
   }
 
   const result = negotiation.result;
-  const callStatusLabel =
-    negotiation.call.error ?? (negotiation.call.mode === "sandbox" ? negotiation.call.status.replace("-", " ") : "simulated flow");
-  const savingsRate = Math.max(0, Math.min(100, Math.round((result.monthlySavings / result.currentMonthly) * 100)));
+  const callModeLabel =
+    negotiation.call.mode === "conversation_relay"
+      ? "Live rep mode"
+      : negotiation.call.mode === "sandbox"
+        ? "Guided voice demo"
+        : "Simulated run";
+  const callStatusLabel = negotiation.call.error ?? negotiation.call.status.replace("-", " ");
+  const savingsRate =
+    result.currentMonthly > 0
+      ? Math.max(0, Math.min(100, Math.round((result.monthlySavings / result.currentMonthly) * 100)))
+      : 0;
+  const transcriptItems = result.transcriptSummary.length
+    ? result.transcriptSummary
+    : ["RateDrop completed the support mission and generated the final outcome."];
 
   return (
-    <main className="page-shell">
-      <header className="subpage-topbar">
-        <Link className="brand-lockup" href="/">
-          <div className="brand-mark">R</div>
+    <main className="result-page">
+      <nav className="result-nav">
+        <Link className="result-brand" href="/">
+          <span>R</span>
           <div>
             <strong>RateDrop</strong>
-            <small>Outcome Proof</small>
+            <small>Action report</small>
           </div>
         </Link>
-        <div className="topbar-status">
-          <span className="status-dot" />
-          Result Verified
+        <div className="result-status-pill">
+          <div className="status-dot" />
+          <span>{negotiation.status === "completed" ? "Result ready" : "Run in progress"}</span>
         </div>
-      </header>
+      </nav>
 
-      <section className="result-hero card" style={{ background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)' }}>
-        <span className="section-tag">Negotiation Result</span>
-        <h1 className={`result-savings-reveal${savingsVisible ? "" : " result-savings-hidden"}`} style={{ fontSize: '5rem', marginBottom: '16px' }}>{result.summary}</h1>
-        <p className="lede" style={{ marginBottom: '40px' }}>Deterministic savings proven through voice sandbox execution.</p>
-        
-        <div className="result-strip">
-          <div className="result-card">
+      <section className="result-shell">
+        <div className="result-hero fade-in">
+          <div className="result-kicker">Final outcome</div>
+          <h1>{result.summary}</h1>
+          <p>
+            A deterministic RateDrop agent completed the call plan, captured the proof points,
+            and calculated the savings in code.
+          </p>
+        </div>
+
+        <div className="result-metrics" aria-label="Savings summary">
+          <article>
             <span>Before</span>
-            <strong>{money(result.currentMonthly)}/mo</strong>
-          </div>
-          <div className="result-card accent-card">
+            <strong>{money(result.currentMonthly)}</strong>
+            <small>Original monthly bill</small>
+          </article>
+          <article className="is-primary">
             <span>After</span>
-            <strong>{money(displayMonthly ?? result.currentMonthly)}/mo</strong>
-          </div>
-          <div className="result-card">
-            <span>Monthly Savings</span>
+            <strong>{money(displayMonthly ?? result.currentMonthly)}</strong>
+            <small>New monthly cost</small>
+          </article>
+          <article>
+            <span>Saved monthly</span>
             <strong>{money(result.monthlySavings)}</strong>
-          </div>
-          <div className="result-card">
-            <span>12-Month Value</span>
+            <small>{savingsRate}% reduction</small>
+          </article>
+          <article className="is-dark">
+            <span>First year value</span>
             <strong>{money(result.effectiveFirstYearValue)}</strong>
-          </div>
+            <small>Annual savings plus credits</small>
+          </article>
         </div>
 
-        <div className="savings-meter" style={{ marginTop: '40px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', fontSize: '0.85rem' }}>
-            <strong>{savingsRate}% Reduction</strong>
-            <span style={{ color: 'var(--foreground-muted)' }}>Verified math</span>
-          </div>
-          <div className="progress-track" aria-hidden="true" style={{ height: '8px' }}>
-            <span style={{ width: `${savingsRate}%` }} />
-          </div>
-        </div>
-      </section>
+        <div className="result-grid">
+           <section className="result-panel result-chart-panel">
+              <div className="result-panel-head">
+                <span>Cost movement</span>
+                <strong>{money(result.annualSavings)} annualized</strong>
+              </div>
+              <SavingsChart currentMonthly={result.currentMonthly} newMonthly={result.newMonthly} />
+              <div className="result-breakdown">
+                 <div>
+                    <span>Annual savings</span>
+                    <strong>{money(result.annualSavings)}</strong>
+                 </div>
+                 <div>
+                    <span>One-time credit</span>
+                    <strong>{money(result.oneTimeCredit)}</strong>
+                 </div>
+                 <div>
+                    <span>Reduction</span>
+                    <strong>{savingsRate}%</strong>
+                 </div>
+              </div>
+           </section>
 
-      <section className="result-grid" style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '32px', marginTop: '32px' }}>
-        <div className="card result-panel">
-          <span className="section-tag">Comparison</span>
-          <SavingsChart currentMonthly={result.currentMonthly} newMonthly={result.newMonthly} />
-          
-          <div className="equation-card" style={{ marginTop: '32px', padding: '24px' }}>
-            <div>
-              <span className="intel-label">Current</span>
-              <strong>{money(result.currentMonthly)}</strong>
-            </div>
-            <div className="equation-divider">-</div>
-            <div>
-              <span className="intel-label">New</span>
-              <strong>{money(result.newMonthly)}</strong>
-            </div>
-            <div className="equation-divider">=</div>
-            <div style={{ color: 'var(--success)' }}>
-              <span className="intel-label">Saved</span>
-              <strong>{money(result.monthlySavings)}</strong>
-            </div>
-          </div>
-        </div>
+           <aside className="result-side">
+              <section className="result-panel">
+                <div className="result-panel-head">
+                  <span>Proof trail</span>
+                  <strong>{transcriptItems.length} checkpoints</strong>
+                </div>
+                <ol className="proof-list">
+                  {transcriptItems.map((item, i) => (
+                    <li key={i}>
+                       <span>{String(i + 1).padStart(2, "0")}</span>
+                       <p>{item}</p>
+                    </li>
+                  ))}
+                </ol>
+              </section>
 
-        <div className="card result-panel">
-          <span className="section-tag">
-            {negotiation.issueContext ? "Task Outcome" : "What worked"}
-          </span>
-          {negotiation.issueContext && (
-            <div style={{ marginBottom: '32px', borderBottom: '1px solid var(--paper-border)', paddingBottom: '24px' }}>
-              <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>{negotiation.issueContext.companyName}</h3>
-              <p style={{ fontSize: '0.9rem', color: 'var(--foreground-muted)', lineHeight: '1.5' }}>{negotiation.issueContext.problemSummary}</p>
-            </div>
-          )}
-          <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
-            {result.transcriptSummary.map((item) => (
-              <li key={item} style={{ display: 'flex', gap: '12px', fontSize: '0.9rem', color: 'var(--foreground-muted)' }}>
-                <span style={{ color: 'var(--success)' }}>✓</span>
-                {item}
-              </li>
-            ))}
-          </ul>
-          {negotiation.issueContext && (
-            <div style={{ marginTop: '32px', borderTop: '1px solid var(--paper-border)', paddingTop: '24px' }}>
-              <label className="intel-label">Outcome Achieved</label>
-              <p style={{ fontSize: '0.9rem', color: 'var(--foreground)', marginTop: '8px' }}>{negotiation.issueContext.desiredOutcome}</p>
-            </div>
-          )}
-        </div>
-      </section>
+              {negotiation.issueContext && (
+                <section className="result-panel result-context">
+                  <div className="result-panel-head">
+                    <span>Mission context</span>
+                    <strong>{negotiation.issueContext.companyName}</strong>
+                  </div>
+                  <p>{negotiation.issueContext.problemSummary}</p>
+                  {negotiation.issueContext.desiredOutcome && (
+                    <div>
+                      <span>Desired outcome</span>
+                      <strong>{negotiation.issueContext.desiredOutcome}</strong>
+                    </div>
+                  )}
+                </section>
+              )}
 
-      <section style={{ marginTop: '60px', display: 'flex', justifyContent: 'center', gap: '16px' }}>
-        <Link className="primary-button" href="/" style={{ width: 'auto', padding: '0 32px' }}>
-          Process Another Bill
-        </Link>
-        <Link href={`/call/${negotiation.id}`} style={{ display: 'flex', alignItems: 'center', padding: '0 32px', border: '1px solid var(--paper-border)', borderRadius: '8px', fontSize: '0.9rem', fontWeight: '600' }}>
-          Revisit Transcript
-        </Link>
+              <section className="result-panel result-call">
+                <div>
+                  <span>Call mode</span>
+                  <strong>{callModeLabel}</strong>
+                </div>
+                <p>{callStatusLabel}</p>
+              </section>
+
+              <div className="result-actions">
+                <Link className="primary-button" href="/">Start another run</Link>
+                <Link className="btn btn-outline" href={`/call/${negotiation.id}`}>Review call log</Link>
+              </div>
+           </aside>
+        </div>
       </section>
     </main>
   );

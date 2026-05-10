@@ -24,7 +24,7 @@ export type CallState = {
   to: string | null;
   fromNumber: string | null;
   status: string;
-  mode: "sandbox" | "simulated";
+  mode: "sandbox" | "simulated" | "conversation_relay";
   error: string | null;
 };
 
@@ -49,6 +49,7 @@ export type IssueContext = {
   completionCriteria: string[];
   successSignals: string[];
   escalationTerms: string[];
+  contactLookup?: Record<string, unknown> | null;
 };
 
 export type Negotiation = {

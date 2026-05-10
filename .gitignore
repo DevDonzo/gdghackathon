@@ -3,9 +3,11 @@
 .env.*.local
 node_modules
 .next
+dist
 .venv
 .DS_Store
 *.log
+*.tsbuildinfo
 __pycache__
 *.pyc
 .ratedrop/

@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import json
-import asyncio
 from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from backend.app.core.config import get_settings
 from backend.app.db.mongo import get_collections
 from backend.app.models.schemas import object_id, serialize_negotiation, serialize_turn
 from backend.app.services.events import publish
@@ -138,9 +136,6 @@ async def _handle_rep_prompt(negotiation_id: str, websocket: WebSocket, prompt: 
     await _persist_turn_and_publish(negotiation_id, ai_turn)
     await _send_text(websocket, decision["text"])
 
-    if decision["completed"]:
-        await websocket.send_text(json.dumps({"type": "end", "handoffData": json.dumps({"reason": decision["action"]})}))
-
 
 async def _persist_turn_and_publish(negotiation_id: str, turn: dict[str, Any]) -> None:
     collections = get_collections()
@@ -200,8 +195,4 @@ async def _send_text(websocket: WebSocket, text: str) -> None:
 
 
 async def _advance_policy_for_prompt(negotiation: dict[str, Any], prompt: str) -> dict[str, Any]:
-    if get_settings().normalized_agent_mode == "strands":
-        from backend.app.agent.negotiator_agent import run_negotiator_agent
-
-        return await asyncio.to_thread(run_negotiator_agent, negotiation, prompt)
     return advance_live_policy(negotiation, prompt)

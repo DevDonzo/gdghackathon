@@ -162,15 +162,14 @@ def conversation_relay_twiml(negotiation: dict[str, Any], websocket_url: str, ac
     provider = escape(str(negotiation.get("provider", "carrier")), quote=True)
     negotiation_id = escape(str(negotiation.get("_id", "")), quote=True)
     scenario = escape(str(negotiation.get("scenarioLabel", "Negotiation")), quote=True)
-    objective = escape(str(negotiation.get("currentObjective", "Live phone demo")), quote=True)
+    objective = escape(str(negotiation.get("currentObjective", "Live phone call")), quote=True)
     action_attr = f' action="{escape(action_url, quote=True)}"' if action_url else ""
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
         "<Response>"
         f"<Connect{action_attr}>"
         f'<ConversationRelay url="{escape(websocket_url, quote=True)}" '
-        'welcomeGreeting="RateDrop live phone demo connected. Please speak as the carrier representative." '
-        'welcomeGreetingInterruptible="speech" language="en-US" interruptible="true">'
+        'language="en-US" interruptible="true">'
         f'<Parameter name="negotiationId" value="{negotiation_id}"/>'
         f'<Parameter name="provider" value="{provider}"/>'
         f'<Parameter name="scenario" value="{scenario}"/>'
@@ -195,7 +194,10 @@ def negotiation_twiml(negotiation: dict[str, Any], request: Request, step: int, 
     turn_plan = negotiation.get("turnPlan", [])
 
     if step == 0:
-        response.say("Welcome to the RateDrop telecom sandbox. This call will narrate a controlled bill negotiation demo.")
+        response.say(
+            "Connected. Please speak as the company support representative. "
+            "The customer representative will start, then pause for your answer."
+        )
         response.pause(length=1)
 
     if step >= len(turn_plan):
@@ -206,15 +208,23 @@ def negotiation_twiml(negotiation: dict[str, Any], request: Request, step: int, 
         credit = result.get("oneTimeCredit", 0.0)
         if credit:
             response.say(f"A one time credit of {credit:.2f} dollars was also secured.")
-        response.say("Thank you for reviewing the RateDrop demo.")
-        response.hangup()
+        response.say("Thanks, that resolves what I called about.")
+        response.pause(length=120)
+        response.redirect(f"{base}/twilio/voice/negotiations/{negotiation['_id']}?step={step}", method="POST")
         return str(response)
 
     turn = turn_plan[step]
-    speaker = "RateDrop negotiator" if turn["role"] == "negotiator" else f"{negotiation['provider']} representative"
-    response.say(f"{speaker}. {turn['text']}")
+    next_url = f"{base}/twilio/voice/negotiations/{negotiation['_id']}?step={step + 1}"
+    if turn["role"] == "rep":
+        response.say(f"Your turn as the {negotiation['provider']} representative. Please answer after this prompt.")
+        gather = response.gather(input="speech", timeout=8, speech_timeout="auto", action=next_url, method="POST")
+        gather.pause(length=7)
+        response.redirect(next_url, method="POST")
+        return str(response)
+
+    response.say(f"RateDrop agent. {turn['text']}")
     response.pause(length=1)
-    response.redirect(f"{base}/twilio/voice/negotiations/{negotiation['_id']}?step={step + 1}", method="POST")
+    response.redirect(next_url, method="POST")
     return str(response)
 
 

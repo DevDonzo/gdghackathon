@@ -1,11 +1,19 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
-
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-import { createDemoBill, createNegotiation, fetchDemoBills, fetchRecentNegotiations, money, startNegotiation, uploadBill, type DemoBillOption } from "@/lib/api";
+import {
+  createDemoBill,
+  createNegotiation,
+  fetchDemoBills,
+  fetchRecentNegotiations,
+  money,
+  startNegotiation,
+  uploadBill,
+  type DemoBillOption
+} from "@/lib/api";
 import { BillSummary, Negotiation } from "@/lib/types";
 
 export function UploadPanel() {
@@ -21,17 +29,13 @@ export function UploadPanel() {
   const [customAngles, setCustomAngles] = useState<string[]>([]);
   const [customInput, setCustomInput] = useState("");
 
-  // Issue Context State
   const [companyName, setCompanyName] = useState("");
   const [issueDescription, setIssueDescription] = useState("");
   const [desiredOutcome, setDesiredOutcome] = useState("");
-
   const [customerFacts, setCustomerFacts] = useState<string[]>([]);
   const [factInput, setFactInput] = useState("");
-
   const [constraints, setConstraints] = useState<string[]>([]);
   const [constraintInput, setConstraintInput] = useState("");
-
   const [completionCriteria, setCompletionCriteria] = useState<string[]>([]);
   const [criteriaInput, setCriteriaInput] = useState("");
 
@@ -64,8 +68,10 @@ export function UploadPanel() {
       setBill(extracted);
       setCustomAngles([]);
       setCustomInput("");
-      const history = await fetchRecentNegotiations();
-      setRecentNegotiations(history);
+      if (!companyName) {
+        setCompanyName(extracted.provider);
+      }
+      setRecentNegotiations(await fetchRecentNegotiations());
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "Upload failed.");
     } finally {
@@ -81,14 +87,16 @@ export function UploadPanel() {
     setError(null);
     setStarting(true);
     try {
-      const issueContext = companyName || issueDescription || desiredOutcome || customerFacts.length || constraints.length || completionCriteria.length ? {
-        companyName,
-        issueDescription,
-        desiredOutcome,
-        customerFacts,
-        constraints,
-        completionCriteria
-      } : undefined;
+      const issueContext = hasIssueContext()
+        ? {
+            companyName,
+            issueDescription,
+            desiredOutcome,
+            customerFacts,
+            constraints,
+            completionCriteria
+          }
+        : undefined;
 
       const negotiation = await createNegotiation(bill.id, customAngles, issueContext);
       const started = await startNegotiation(negotiation.id);
@@ -107,10 +115,10 @@ export function UploadPanel() {
       const extracted = await createDemoBill(scenarioId);
       setBill(extracted);
       setSelectedFile(null);
+      setCompanyName(extracted.provider);
       setCustomAngles([]);
       setCustomInput("");
-      const history = await fetchRecentNegotiations();
-      setRecentNegotiations(history);
+      setRecentNegotiations(await fetchRecentNegotiations());
     } catch (demoError) {
       setError(demoError instanceof Error ? demoError.message : "Could not load demo bill.");
     } finally {
@@ -118,12 +126,34 @@ export function UploadPanel() {
     }
   }
 
+  function hasIssueContext() {
+    return Boolean(
+      companyName ||
+        issueDescription ||
+        desiredOutcome ||
+        customerFacts.length ||
+        constraints.length ||
+        completionCriteria.length
+    );
+  }
+
+  function addChip(value: string, values: string[], setValues: (items: string[]) => void, clear: () => void) {
+    const clean = value.trim();
+    if (!clean || values.includes(clean)) {
+      clear();
+      return;
+    }
+    setValues([...values, clean]);
+    clear();
+  }
+
+  function addCustomAngle() {
+    addChip(customInput, customAngles, setCustomAngles, () => setCustomInput(""));
+  }
+
   function historyOutcome(item: Negotiation): string {
     if (item.call.error) {
       return item.call.error;
-    }
-    if (item.call.status === "failed") {
-      return "Sandbox call failed";
     }
     if (item.result) {
       return `${money(item.result.newMonthly)}/mo after`;
@@ -132,245 +162,208 @@ export function UploadPanel() {
   }
 
   return (
-    <div className="card" style={{ padding: '60px' }}>
-      <div className="panel-header" style={{ marginBottom: '80px' }}>
-        <span className="section-tag">Direct Input</span>
-        <h2 style={{ fontSize: '2rem', letterSpacing: '-0.04em' }}>Carrier Statement</h2>
-        <p style={{ color: 'var(--foreground-muted)', fontSize: '0.95rem', maxWidth: '320px', marginTop: '12px' }}>
-          Upload your statement to extract deterministic leverage points.
-        </p>
-      </div>
-
-      <div className="upload-intel" style={{ marginBottom: '80px', gap: '60px' }}>
-        <div>
-          <span className="intel-label">Extraction</span>
-          <strong style={{ fontSize: '0.9rem' }}>Plan / Fees</strong>
+    <section className="deploy-grid" aria-label="Agent deployment">
+      <div className="deploy-card">
+        <div className="panel-head">
+          <span className="section-tag">Input</span>
+          <h3>Bill or receipt</h3>
+          <p>Start with a real statement or load a demo scenario. The extracted bill becomes the agent mission.</p>
         </div>
-        <div>
-          <span className="intel-label">Strategy</span>
-          <strong style={{ fontSize: '0.9rem' }}>Policy-Based</strong>
-        </div>
-      </div>
 
-      <form className="upload-form" onSubmit={handleUpload}>
-        <label className="upload-dropzone" htmlFor="bill-upload" style={{ padding: '80px' }}>
-          <span style={{ fontSize: '1rem' }}>{selectedFile ? selectedFile.name : "Select bill file"}</span>
-          <small>{selectedFile ? "File ready" : "PDF or Image"}</small>
-        </label>
-        <input
-          id="bill-upload"
-          className="sr-only"
-          type="file"
-          accept=".pdf,image/png,image/jpeg,image/jpg"
-          onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
-        />
-        <button className="primary-button" disabled={uploading} type="submit" style={{ marginTop: '40px' }}>
-          {uploading ? "Parsing..." : "Extract Charges"}
-        </button>
-      </form>
+        <form className="upload-form" onSubmit={handleUpload}>
+          <label className="dropzone" htmlFor="bill-upload">
+            <span>{selectedFile ? selectedFile.name : "Select statement file"}</span>
+            <small>PDF, JPG, or PNG</small>
+          </label>
+          <input
+            id="bill-upload"
+            className="sr-only"
+            type="file"
+            accept=".pdf,image/png,image/jpeg,image/jpg"
+            onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+          />
+          <button className="primary-button" disabled={uploading} type="submit">
+            {uploading ? "Scanning..." : "Scan bill"}
+          </button>
+        </form>
 
-      {demoBills.length > 0 ? (
-        <div style={{ marginTop: '100px', borderTop: '1px solid var(--paper-border)', paddingTop: '60px' }}>
-          <h4 style={{ marginBottom: '32px' }}>Scenarios</h4>
-          <div className="demo-bill-list" style={{ gap: '16px' }}>
+        {demoBills.length > 0 ? (
+          <div className="demo-list">
+            <span className="mini-label">Demo scenarios</span>
             {demoBills.map((item) => (
               <button
-                className="demo-bill-card"
-                disabled={loadingDemo !== null}
+                className="demo-row"
                 key={item.id}
+                disabled={loadingDemo !== null}
                 onClick={() => handleDemoBill(item.id)}
                 type="button"
-                style={{ padding: '24px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
               >
-                <div style={{ textAlign: 'left' }}>
-                  <strong style={{ display: 'block', fontSize: '0.95rem' }}>{item.label}</strong>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--foreground-subtle)', marginTop: '4px' }}>
-                    {item.provider} · {money(item.monthlyTotal)}/mo · {item.headlineAngle}
-                  </div>
-                </div>
-                <small style={{ fontSize: '0.65rem', fontFamily: 'var(--font-mono)', color: 'var(--foreground-subtle)' }}>{loadingDemo === item.id ? "LOADING" : "EXECUTE"}</small>
+                <span>
+                  <strong>{item.label}</strong>
+                  <small>{item.provider} · {money(item.monthlyTotal)}</small>
+                </span>
+                <em>{loadingDemo === item.id ? "Loading" : "Load"}</em>
               </button>
             ))}
           </div>
+        ) : null}
+      </div>
+
+      <div className="deploy-card mission-card">
+        <div className="panel-head">
+          <span className="section-tag">Mission</span>
+          <h3>What should the agent fix?</h3>
+          <p>Optional context lets RateDrop handle more than telecom negotiation, like refunds, disputes, travel support, or account fixes.</p>
         </div>
-      ) : null}
 
-      {error ? <div className="error-banner">{error}</div> : null}
+        <div className="mission-fields">
+          <label>
+            <span>Company</span>
+            <input value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="Bell, Air Canada, Rogers..." />
+          </label>
+          <label>
+            <span>Problem</span>
+            <textarea value={issueDescription} onChange={(event) => setIssueDescription(event.target.value)} placeholder="Describe the charge, booking, account issue, or outcome gap." />
+          </label>
+          <label>
+            <span>Desired outcome</span>
+            <input value={desiredOutcome} onChange={(event) => setDesiredOutcome(event.target.value)} placeholder="Refund, lower monthly rate, rebooking, fee removed..." />
+          </label>
+        </div>
 
-      {bill ? (
-        <div style={{ marginTop: '100px', borderTop: '1px solid var(--paper-border)', paddingTop: '80px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '48px' }}>
+        <ChipEditor
+          label="Known facts"
+          value={factInput}
+          values={customerFacts}
+          placeholder="Booking ref, account number, receipt total..."
+          onValue={setFactInput}
+          onAdd={() => addChip(factInput, customerFacts, setCustomerFacts, () => setFactInput(""))}
+          onRemove={(item) => setCustomerFacts(customerFacts.filter((fact) => fact !== item))}
+        />
+        <ChipEditor
+          label="Constraints"
+          value={constraintInput}
+          values={constraints}
+          placeholder="Do not accept vague callback..."
+          onValue={setConstraintInput}
+          onAdd={() => addChip(constraintInput, constraints, setConstraints, () => setConstraintInput(""))}
+          onRemove={(item) => setConstraints(constraints.filter((constraint) => constraint !== item))}
+        />
+        <ChipEditor
+          label="Completion proof"
+          value={criteriaInput}
+          values={completionCriteria}
+          placeholder="Rep confirms refund and gives reference..."
+          onValue={setCriteriaInput}
+          onAdd={() => addChip(criteriaInput, completionCriteria, setCompletionCriteria, () => setCriteriaInput(""))}
+          onRemove={(item) => setCompletionCriteria(completionCriteria.filter((criterion) => criterion !== item))}
+        />
+      </div>
+
+      <div className="deploy-card outcome-card">
+        <div className="panel-head">
+          <span className="section-tag">Launch</span>
+          <h3>{bill ? "Ready for call" : "Waiting for bill"}</h3>
+          <p>{bill ? "Review the extracted bill facts, add optional pressure points, then start the live agent flow." : "Upload or load a demo bill to unlock the launch sequence."}</p>
+        </div>
+
+        {bill ? (
+          <div className="bill-proof">
             <div>
-              <span className="section-tag">Analysis</span>
-              <h3 style={{ fontSize: '2rem' }}>{bill.provider}</h3>
+              <span>Provider</span>
+              <strong>{bill.provider}</strong>
             </div>
-            <div className="status-pill">{Math.round(bill.extractionConfidence * 100)}% Match</div>
-          </div>
-
-          <div className="call-meta-grid" style={{ gap: '24px', marginBottom: '60px' }}>
-            <div className="stat-card" style={{ padding: '32px' }}>
+            <div>
               <span>Plan</span>
               <strong>{bill.planName}</strong>
             </div>
-            <div className="stat-card" style={{ padding: '32px' }}>
-              <span>Monthly</span>
+            <div>
+              <span>Monthly total</span>
               <strong>{money(bill.monthlyTotal)}</strong>
             </div>
+            <div>
+              <span>Confidence</span>
+              <strong>{Math.round(bill.extractionConfidence * 100)}%</strong>
+            </div>
           </div>
+        ) : (
+          <div className="empty-state">No statement loaded yet.</div>
+        )}
 
-          <div className="detail-block">
-            <h4 style={{ marginBottom: '24px' }}>Leverage</h4>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '24px' }}>
-              {bill.negotiationAngles.map((angle) => (
-                <span key={angle} style={{ padding: '6px 12px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', fontSize: '0.8rem', color: 'var(--foreground-muted)' }}>
-                  {angle}
+        {bill ? (
+          <ChipEditor
+            label="Extra negotiation angles"
+            value={customInput}
+            values={customAngles}
+            placeholder="Promo expired, competitor price, loyalty issue..."
+            onValue={setCustomInput}
+            onAdd={addCustomAngle}
+            onRemove={(item) => setCustomAngles(customAngles.filter((angle) => angle !== item))}
+          />
+        ) : null}
+
+        {error ? <div className="error-banner">{error}</div> : null}
+
+        <button className="primary-button launch-button" disabled={!bill || starting} onClick={handleStart} type="button">
+          {starting ? "Initializing..." : "Start voice agent"}
+        </button>
+
+        {recentNegotiations.length ? (
+          <div className="recent-list">
+            <span className="mini-label">Recent sessions</span>
+            {recentNegotiations.slice(0, 4).map((item) => (
+              <Link className="recent-row" href={item.status === "completed" ? `/result/${item.id}` : `/call/${item.id}`} key={item.id}>
+                <span>
+                  <strong>{item.provider}</strong>
+                  <small>{historyOutcome(item)}</small>
                 </span>
-              ))}
-            </div>
-            <form
-              className="leverage-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const trimmed = customInput.trim();
-                if (!trimmed) return;
-                if (!customAngles.includes(trimmed) && !bill.negotiationAngles.includes(trimmed)) {
-                  setCustomAngles((current) => [...current, trimmed]);
-                }
-                setCustomInput("");
-              }}
-              style={{ display: 'flex', gap: '12px' }}
-            >
-              <input
-                style={{ flex: 1, height: '48px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', padding: '0 16px', fontSize: '0.9rem' }}
-                maxLength={80}
-                onChange={(event) => setCustomInput(event.target.value)}
-                placeholder="Custom leverage point..."
-                type="text"
-                value={customInput}
-              />
-              <button style={{ padding: '0 20px', background: 'var(--foreground-subtle)', color: 'var(--foreground)', borderRadius: '2px', fontSize: '0.8rem', fontWeight: '700', cursor: 'pointer' }} disabled={!customInput.trim()} type="submit">
-                Add
-              </button>
-            </form>
-          </div>
-
-          <div className="detail-block" style={{ marginTop: '60px' }}>
-            <span className="section-tag">Task Configuration</span>
-            <h4 style={{ marginBottom: '32px', marginTop: '8px' }}>What do you need RateDrop to fix?</h4>
-
-            <div style={{ display: 'grid', gap: '32px' }}>
-              <div>
-                <label className="intel-label">Company Name</label>
-                <input
-                  style={{ width: '100%', height: '48px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', padding: '0 16px' }}
-                  placeholder="e.g. Air Canada"
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="intel-label">Problem Description</label>
-                <textarea
-                  style={{ width: '100%', minHeight: '100px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', padding: '16px', font: 'inherit' }}
-                  placeholder="e.g. My flight was cancelled and the refund has not been processed."
-                  value={issueDescription}
-                  onChange={(e) => setIssueDescription(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="intel-label">Desired Outcome</label>
-                <input
-                  style={{ width: '100%', height: '48px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', padding: '0 16px' }}
-                  placeholder="e.g. Get the refund processed or confirmed rebooking"
-                  value={desiredOutcome}
-                  onChange={(e) => setDesiredOutcome(e.target.value)}
-                />
-              </div>
-
-              {/* Customer Facts */}
-              <div>
-                <label className="intel-label">Known Facts</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
-                  {customerFacts.map((fact, i) => (
-                    <span key={i} style={{ padding: '4px 10px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', fontSize: '0.8rem' }}>{fact}</span>
-                  ))}
-                </div>
-                <form style={{ display: 'flex', gap: '12px' }} onSubmit={(e) => { e.preventDefault(); if (factInput.trim()) { setCustomerFacts([...customerFacts, factInput.trim()]); setFactInput(""); }}}>
-                  <input
-                    style={{ flex: 1, height: '40px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', padding: '0 12px' }}
-                    placeholder="e.g. Booking reference ABC123"
-                    value={factInput}
-                    onChange={(e) => setFactInput(e.target.value)}
-                  />
-                  <button type="submit" style={{ padding: '0 16px', background: 'var(--paper-border)', borderRadius: '2px', fontSize: '0.8rem', cursor: 'pointer' }}>Add</button>
-                </form>
-              </div>
-
-              {/* Constraints */}
-              <div>
-                <label className="intel-label">Constraints</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
-                  {constraints.map((c, i) => (
-                    <span key={i} style={{ padding: '4px 10px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', fontSize: '0.8rem' }}>{c}</span>
-                  ))}
-                </div>
-                <form style={{ display: 'flex', gap: '12px' }} onSubmit={(e) => { e.preventDefault(); if (constraintInput.trim()) { setConstraints([...constraints, constraintInput.trim()]); setConstraintInput(""); }}}>
-                  <input
-                    style={{ flex: 1, height: '40px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', padding: '0 12px' }}
-                    placeholder="e.g. Do not accept a vague callback"
-                    value={constraintInput}
-                    onChange={(e) => setConstraintInput(e.target.value)}
-                  />
-                  <button type="submit" style={{ padding: '0 16px', background: 'var(--paper-border)', borderRadius: '2px', fontSize: '0.8rem', cursor: 'pointer' }}>Add</button>
-                </form>
-              </div>
-
-              {/* Completion Criteria */}
-              <div>
-                <label className="intel-label">Completion Criteria</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
-                  {completionCriteria.map((c, i) => (
-                    <span key={i} style={{ padding: '4px 10px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', fontSize: '0.8rem' }}>{c}</span>
-                  ))}
-                </div>
-                <form style={{ display: 'flex', gap: '12px' }} onSubmit={(e) => { e.preventDefault(); if (criteriaInput.trim()) { setCompletionCriteria([...completionCriteria, criteriaInput.trim()]); setCriteriaInput(""); }}}>
-                  <input
-                    style={{ flex: 1, height: '40px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', padding: '0 12px' }}
-                    placeholder="e.g. Refund is processed or reference number secured"
-                    value={criteriaInput}
-                    onChange={(e) => setCriteriaInput(e.target.value)}
-                  />
-                  <button type="submit" style={{ padding: '0 16px', background: 'var(--paper-border)', borderRadius: '2px', fontSize: '0.8rem', cursor: 'pointer' }}>Add</button>
-                </form>
-              </div>
-            </div>
-          </div>
-
-          <button className="primary-button" disabled={starting} onClick={handleStart} type="button" style={{ marginTop: '80px' }}>
-            {starting ? "Initializing Voice..." : "Run Negotiation"}
-          </button>
-        </div>
-      ) : null}
-
-      {recentNegotiations.length > 0 ? (
-        <div style={{ marginTop: '120px', borderTop: '1px solid var(--paper-border)', paddingTop: '80px' }}>
-          <h4 style={{ marginBottom: '40px' }}>History</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {recentNegotiations.map((item) => (
-              <Link href={`/result/${item.id}`} key={item.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '20px 24px', background: 'transparent', borderRadius: '4px', border: '1px solid var(--paper-border)' }}>
-                <div>
-                  <strong style={{ display: 'block', fontSize: '0.95rem', letterSpacing: '-0.02em' }}>{item.provider}</strong>
-                  <small style={{ color: 'var(--foreground-subtle)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: '4px', display: 'block' }}>{item.scenarioLabel}</small>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <span style={{ display: 'block', fontSize: '1rem', fontWeight: '600' }}>{money(item.currentMonthly)}</span>
-                  <small style={{ color: 'var(--foreground-muted)', fontSize: '0.75rem', fontFamily: 'var(--font-mono)' }}>{historyOutcome(item)}</small>
-                </div>
+                <em>{item.status}</em>
               </Link>
             ))}
           </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+type ChipEditorProps = {
+  label: string;
+  value: string;
+  values: string[];
+  placeholder: string;
+  onValue: (value: string) => void;
+  onAdd: () => void;
+  onRemove: (value: string) => void;
+};
+
+function ChipEditor({ label, value, values, placeholder, onValue, onAdd, onRemove }: ChipEditorProps) {
+  return (
+    <div className="chip-editor">
+      <span className="mini-label">{label}</span>
+      <div className="chip-input-row">
+        <input
+          value={value}
+          onChange={(event) => onValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onAdd();
+            }
+          }}
+          placeholder={placeholder}
+        />
+        <button type="button" onClick={onAdd}>
+          Add
+        </button>
+      </div>
+      {values.length ? (
+        <div className="chip-list">
+          {values.map((item) => (
+            <button type="button" key={item} onClick={() => onRemove(item)}>
+              {item}
+            </button>
+          ))}
         </div>
       ) : null}
     </div>

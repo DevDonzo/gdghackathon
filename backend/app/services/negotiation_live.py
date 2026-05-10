@@ -96,7 +96,7 @@ def classify_support_utterance(text: str, negotiation: dict[str, Any]) -> str:
 
 
 def initial_live_state() -> dict[str, Any]:
-    return {"node": "open", "counterCount": 0, "accepted": False, "closing": False}
+    return {"node": "open", "counterCount": 0, "accepted": False, "awaitingProof": False, "closing": False}
 
 
 def opening_live_turn(negotiation: dict[str, Any]) -> dict[str, Any]:
@@ -117,8 +117,8 @@ def opening_live_turn(negotiation: dict[str, Any]) -> dict[str, Any]:
         }
 
     text = (
-        f"I'm calling about this {negotiation['provider']} bill at ${float(negotiation['currentMonthly']):.2f} a month. "
-        f"I'd like a retention review and a monthly rate closer to ${float(negotiation['targetMonthly']):.2f}."
+        f"Hi, I'm calling about this {negotiation['provider']} bill at ${float(negotiation['currentMonthly']):.2f} a month. "
+        f"Can you check loyalty or retention pricing closer to ${float(negotiation['targetMonthly']):.2f}?"
     )
     return {
         "role": "negotiator",
@@ -146,10 +146,16 @@ def advance_live_policy(negotiation: dict[str, Any], rep_text: str) -> dict[str,
     completed = False
     accepted = False
 
-    if proposed_monthly is not None and proposed_monthly <= max(target, walkaway):
-        action = "accept_offer"
-        next_node = "accepted"
+    awaiting_proof = bool(state.get("awaitingProof"))
+
+    if awaiting_proof and rep_intent == "close":
+        action = "confirm_accepted_offer"
+        next_node = "confirmed"
         completed = True
+        accepted = True
+    elif proposed_monthly is not None and proposed_monthly <= max(target, walkaway):
+        action = "accept_offer"
+        next_node = "awaiting_confirmation"
         accepted = True
     elif rep_intent == "credit_offer":
         action = "ask_for_credit_plus_rate_relief"
@@ -166,8 +172,8 @@ def advance_live_policy(negotiation: dict[str, Any], rep_text: str) -> dict[str,
         next_node = "rep_refusal"
     elif rep_intent == "close":
         action = "accept_offer" if best_offer and best_offer <= max(target, walkaway) else "exit_without_accepting"
-        next_node = "accepted" if action == "accept_offer" else "walkaway_reached"
-        completed = True
+        next_node = "awaiting_confirmation" if action == "accept_offer" else "walkaway_reached"
+        completed = action != "accept_offer"
         accepted = action == "accept_offer"
     else:
         action = "push_for_retention"
@@ -178,6 +184,7 @@ def advance_live_policy(negotiation: dict[str, Any], rep_text: str) -> dict[str,
         "node": next_node,
         "counterCount": counter_count,
         "accepted": accepted,
+        "awaitingProof": action == "accept_offer" and not completed,
         "closing": completed,
     }
     ai_text = phrase_live_action(action, negotiation, proposed_monthly, best_offer, best_credit)
@@ -301,25 +308,28 @@ def phrase_live_action(
 
     lines = {
         "push_for_retention": (
-            f"I understand. Could you please check retention or loyalty options before the customer decides whether to move the line? "
-            f"The current ${current:.2f} monthly bill is too high for this plan."
+            f"I understand. Can you check loyalty or retention pricing? "
+            f"${current:.2f} a month is too high for this plan."
         ),
         "counter_to_target": (
-            f"That's helpful, but it still doesn't really solve the bill. If you can bring the monthly rate to ${target:.2f}, "
-            "we can accept that on this call."
+            f"That's better, but it still leaves the bill high. If you can do ${target:.2f} a month, "
+            "we can settle it on this call."
         ),
         "ask_for_credit_plus_rate_relief": (
-            f"I appreciate the credit. The recurring charge is still the bigger issue, though. "
-            f"Can you also move the plan closer to ${target:.2f} per month?"
+            f"I appreciate the credit. The monthly charge is still the real issue. "
+            f"Can you also bring the plan closer to ${target:.2f} a month?"
         ),
         "accept_offer": (
-            f"That works. Please apply the ${best_offer or proposed_monthly or walkaway:.2f} monthly rate"
+            f"That works. Please apply ${best_offer or proposed_monthly or walkaway:.2f} a month"
             + (f" and the ${credit:.2f} credit" if credit else "")
-            + " and confirm it is noted on the account."
+            + " now. Before we end, please confirm the effective date and that the account notes show this change."
+        ),
+        "confirm_accepted_offer": (
+            "Perfect. Please keep that confirmation in the account notes. That resolves what I called about."
         ),
         "exit_without_accepting": (
-            f"I do not want to accept a rate above ${walkaway:.2f}. Please note that I called for retention options, "
-            "and I will compare alternatives before keeping this plan."
+            f"I can't accept anything above ${walkaway:.2f}. Please note that we called for retention pricing, "
+            "and the customer will compare alternatives."
         ),
     }
     return lines[action]
@@ -427,7 +437,8 @@ def _objective_for_action(action: str) -> str:
         "push_for_retention": "Pushing for retention review",
         "counter_to_target": "Countering toward target monthly rate",
         "ask_for_credit_plus_rate_relief": "Requesting monthly relief in addition to credit",
-        "accept_offer": "Accepting qualifying live offer",
+        "accept_offer": "Accepting offer and requesting proof",
+        "confirm_accepted_offer": "Confirming accepted offer proof",
         "exit_without_accepting": "Exiting because offer missed walk-away threshold",
     }[action]
 

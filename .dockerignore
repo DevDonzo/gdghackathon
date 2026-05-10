@@ -1,0 +1,15 @@
+.git
+.next
+.ratedrop
+.venv
+dist
+node_modules
+.env
+.env.local
+*.log
+*.pyc
+__pycache__
+frontend/static
+frontend/next-legacy/.next
+frontend/next-legacy/node_modules
+packages/*/dist
