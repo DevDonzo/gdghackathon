@@ -36,7 +36,9 @@ On screen:
 Say:
 
 ```text
-RateDrop is a phone agent for consumer support calls. You give it evidence, a goal, constraints, and what proof counts as done. Then it calls support and handles the conversation for you.
+RateDrop is a phone agent for consumer support calls. You upload a bill or receipt, tell it what needs to be fixed, and RateDrop extracts the company and issue, researches the right support contact, calls on your behalf, waits through the queue, and handles the conversation.
+
+For this video, we are showing the core live loop: evidence, mission, phone call, transcript, and proof.
 ```
 
 ## 0:30-0:55 Setup The Demo
@@ -134,7 +136,7 @@ It uses Google ADK and Gemini for the agent layer, Secret Manager for credential
 Final line:
 
 ```text
-RateDrop handles the support calls you do not want to make.
+RateDrop handles the support calls you do not want to make, including the hold music you should not have to sit through yourself.
 ```
 
 ## Recording Notes
@@ -144,4 +146,3 @@ RateDrop handles the support calls you do not want to make.
 - Use the Rogers demo only.
 - Do not call real Rogers. The app calls the verified demo phone number.
 - If the live phone call fails while recording, show a completed Rogers result and explain the expected call flow.
-

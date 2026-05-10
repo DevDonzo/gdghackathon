@@ -36,7 +36,7 @@ Person B:
 ```text
 Don’t you hate when you call support, sit on hold, explain the same issue again and again, and still leave without the refund, credit, or better price you needed?
 
-Companies already use AI to deal with consumers. RateDrop gives consumers an agent back. You give it evidence, a goal, constraints, and completion proof. It calls support, stays on the line, pushes for the outcome, and returns a transcript and proof.
+Companies already use AI to deal with consumers. RateDrop gives consumers an agent back. You upload a bill or receipt, tell it the problem, and RateDrop extracts the company and issue, researches the right support contact, calls on your behalf, waits through the queue, pushes for the outcome, and returns a transcript and proof.
 ```
 
 Person A:
@@ -67,7 +67,7 @@ The mission is specific: lower the recurring bill to $55, apply the $35 credit, 
 Person B:
 
 ```text
-This is not a generic chatbot. The user defines the facts, constraints, and completion proof. Gemini helps with natural phrasing, but backend policy controls the money, the credit, and when the call can end.
+This is not a generic chatbot. The user defines the facts, constraints, and completion proof. Gemini helps with extraction and natural phrasing, Tavily can support company/contact lookup, but backend policy controls the money, the credit, and when the call can end.
 ```
 
 ## 1:15-2:45 Live Call
@@ -157,6 +157,8 @@ Cloud Run serves the Next.js frontend, FastAPI backend, Twilio webhooks, SSE tra
 
 Twilio needs a public callback URL, the browser needs live transcript streaming, and the voice agent needs a server-side WebSocket loop. Cloud Run gives us all of that in one serverless container.
 
+The long-hold use case is why the cloud runtime matters. The user should not have to sit through an hour of support music. RateDrop is designed as the server-side phone agent that can stay connected, wait for the representative, and bring back the outcome.
+
 Secret Manager stores Gemini, Tavily, Twilio, and SMTP credentials. Cloud Build builds the container, Artifact Registry stores the image, and Cloud Run deploys the live revision.
 
 Google ADK wraps the agent loop with Gemini, but deterministic backend tools control money, constraints, completion proof, and when the call can close.
@@ -173,7 +175,7 @@ Without the cloud runtime, Twilio cannot reach the agent, the UI cannot stream t
 Person B:
 
 ```text
-The demo is telecom, but the pattern works for airline refunds, bank fees, subscription disputes, warranties, and account support.
+The demo is telecom, but the pattern works for airline refunds, bank fees, subscription disputes, warranties, and account support. The full vision is that RateDrop finds the right company line, waits through the queue, handles the call, and only comes back when it has a result or proof of the next step.
 ```
 
 Person A:
@@ -195,4 +197,3 @@ Then:
 - Open `/api/readiness` and show ConversationRelay has no missing callback fields.
 - Show a recent completed Rogers result.
 - Explain the rep script above as the expected live path.
-
