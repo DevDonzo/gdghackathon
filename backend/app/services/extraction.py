@@ -8,7 +8,10 @@ from typing import Any
 from google import genai
 
 from backend.app.core.config import get_settings
-from backend.app.models.schemas import BillExtraction
+from backend.app.models.schemas import BillExtraction, LineItem
+
+
+VALID_CATEGORIES = {"plan", "tax", "fee", "overage", "discount", "other"}
 
 
 EXTRACTION_SCHEMA = {
@@ -122,20 +125,19 @@ def _client() -> genai.Client:
 
 
 def _normalize(extraction: BillExtraction) -> BillExtraction:
-    line_items = extraction.line_items or []
+    line_items = [_normalize_line_item(item) for item in extraction.line_items or [] if item.label.strip()]
     if not line_items:
         line_items = [
-            {
-                "label": extraction.plan_name,
-                "amount": extraction.monthly_total,
-                "recurring": True,
-                "category": "plan",
-            }
+            LineItem(label=extraction.plan_name, amount=extraction.monthly_total, recurring=True, category="plan")
         ]
 
     angles = extraction.negotiation_angles or []
     red_flags = extraction.red_flags or []
     corpus = " ".join([*angles, *red_flags, extraction.plan_name, extraction.provider]).lower()
+    monthly_total = max(float(extraction.monthly_total), 0.0)
+    confidence = max(0.0, min(float(extraction.confidence), 1.0))
+    line_total = _line_item_total(line_items)
+    variance = abs(line_total - monthly_total)
 
     if "promo" in corpus and not any("promo" in angle.lower() for angle in angles):
         angles.append("Expired promotional pricing")
@@ -146,17 +148,41 @@ def _normalize(extraction: BillExtraction) -> BillExtraction:
     if not angles:
         angles = ["Retention review", "Plan comparison", "Loyalty discount"]
 
-    confidence = max(0.0, min(float(extraction.confidence), 1.0))
+    if monthly_total and variance > max(2.0, monthly_total * 0.08):
+        red_flags.append(f"Line items total ${line_total:.2f}, which differs from the stated monthly total.")
+        confidence = min(confidence, 0.72)
+
     return BillExtraction(
         provider=extraction.provider or "Unknown provider",
         currency=extraction.currency or "CAD",
-        monthlyTotal=max(float(extraction.monthly_total), 0.0),
+        monthlyTotal=monthly_total,
         planName=extraction.plan_name or "Current plan",
         lineItems=line_items,
         negotiationAngles=angles[:4],
         redFlags=red_flags[:4],
         confidence=confidence,
     )
+
+
+def _normalize_line_item(item: LineItem) -> LineItem:
+    category = item.category if item.category in VALID_CATEGORIES else "other"
+    amount = round(float(item.amount), 2)
+    return LineItem(
+        label=item.label.strip()[:120],
+        amount=amount,
+        recurring=item.recurring,
+        category=category,
+    )
+
+
+def _line_item_total(line_items: list[LineItem]) -> float:
+    total = 0.0
+    for item in line_items:
+        amount = float(item.amount)
+        if item.category == "discount" and amount > 0:
+            amount *= -1
+        total += amount
+    return round(max(total, 0.0), 2)
 
 
 def _fallback(filename: str) -> BillExtraction:

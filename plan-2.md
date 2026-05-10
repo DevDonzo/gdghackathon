@@ -7,7 +7,7 @@
 
 ## 🎯 The Pitch (memorize this exact sentence)
 
-> **"Upload your phone bill. Our AI calls Bell, negotiates with the rep, and texts you back when it's done — without you ever picking up the phone."**
+> **"Upload your phone bill. Our AI calls Bell, — without you ever picking up the phone."**
 
 That's it. Don't open with the tech stack. Don't open with "we used Gemini." Open with that one sentence and a live demo of the call dialing out.
 

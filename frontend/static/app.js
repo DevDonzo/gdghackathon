@@ -17,6 +17,7 @@ const state = {
   resultConfettiPlayed: false,
   homeLoading: false,
   homeLoaded: false,
+  readiness: null,
 };
 
 let currentEvents = null;
@@ -91,6 +92,47 @@ function brandTopbar(copy) {
   `;
 }
 
+function readinessMarkup() {
+  const readiness = state.readiness;
+  if (!readiness) {
+    return `
+      <div class="ops-card">
+        <span class="section-tag">Demo readiness</span>
+        <p class="mini-note">Checking backend, Gemini, storage, and Twilio trial mode...</p>
+      </div>
+    `;
+  }
+
+  const twilio = readiness.twilio || {};
+  return `
+    <div class="ops-card">
+      <div class="detail-row">
+        <div>
+          <span class="section-tag">Demo readiness</span>
+          <strong>Operational state is visible before the call starts.</strong>
+        </div>
+        <small>${escapeHtml(readiness.status || "unknown")}</small>
+      </div>
+      <div class="ops-grid">
+        ${readinessItem("Storage", readiness.database?.ready, readiness.database?.mode === "mongo" ? "MongoDB Atlas" : "Local persistent fallback")}
+        ${readinessItem("Gemini", readiness.gemini?.configured, readiness.gemini?.model || "Not configured")}
+        ${readinessItem("Twilio trial", twilio.trialCompatible, twilio.mode === "conversation_relay" ? "Live ConversationRelay" : twilio.mode === "sandbox_tts" ? "Narrated Twilio sandbox" : "Simulation fallback")}
+      </div>
+      <p class="mini-note">Free Twilio trial calls require a verified destination number and a public callback URL. If either is missing, RateDrop runs the same transcript and savings flow locally.</p>
+    </div>
+  `;
+}
+
+function readinessItem(label, ready, detail) {
+  return `
+    <div class="ops-item ${ready ? "ready" : "limited"}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${ready ? "Ready" : "Limited"}</strong>
+      <small>${escapeHtml(detail || "Unavailable")}</small>
+    </div>
+  `;
+}
+
 function homeMarkup() {
   const bill = state.bill;
   return pageShell(`
@@ -140,6 +182,8 @@ function homeMarkup() {
             <span class="section-tag">Input to outcome</span>
             <strong>Provider, plan, fees, promo pressure, live call strategy, and deterministic savings forecast.</strong>
           </div>
+
+          ${readinessMarkup()}
 
           <form class="upload-form" id="upload-form">
             <label class="dropzone" for="bill-file">
@@ -269,7 +313,7 @@ function billMarkup(bill) {
       <div class="callout">
         <span class="section-tag">Call setup</span>
         <strong>RateDrop will use the extracted bill facts to pick a deterministic negotiation path.</strong>
-        <p>No freestyle math. No hidden assumptions.</p>
+        <p>No freestyle math. No hidden assumptions. The phone flow is a controlled carrier sandbox, not a real telecom provider call.</p>
       </div>
 
       <div class="detail-block">
@@ -307,25 +351,36 @@ function billMarkup(bill) {
         </div>
       </div>
 
-      <button class="primary" type="button" id="start-button" ${state.startPending ? "disabled" : ""}>
-        ${state.startPending ? "Dialing sandbox..." : "Start negotiation"}
-      </button>
+      <div class="call-actions">
+        <button class="primary" type="button" data-start-mode="conversation_relay" ${state.startPending ? "disabled" : ""}>
+          ${state.startPending ? "Starting call..." : "Start live phone demo"}
+        </button>
+        <button class="secondary" type="button" data-start-mode="sandbox_tts" ${state.startPending ? "disabled" : ""}>
+          Run narrated sandbox
+        </button>
+      </div>
+      <div class="angle-note">
+        <span class="section-tag">Live phone setup</span>
+        <p>Answer the verified Twilio trial phone, speak as the carrier rep, keep replies short, and mention discounts, credits, or retention options. If public callbacks are missing, RateDrop safely falls back to the local simulated flow.</p>
+      </div>
     </section>
   `;
 }
 
 function callMarkup(negotiation) {
+  const proof = negotiation.strategyProof;
   const title = negotiation.status === "failed"
     ? `${negotiation.provider} negotiation failed`
     : negotiation.status === "completed"
       ? `${negotiation.provider} negotiation complete`
       : `${negotiation.provider} negotiation in progress`;
+  const isLivePhone = negotiation.call.mode === "conversation_relay";
   const displayCallStatus =
     negotiation.status === "failed"
       ? "failed"
       : negotiation.status === "completed" && negotiation.call.status !== "failed"
         ? "completed"
-        : negotiation.call.mode === "sandbox"
+        : negotiation.call.mode === "sandbox" || isLivePhone
           ? negotiation.call.status
           : "simulation running";
   const progress = Math.min(100, Math.round((state.turns.length / 8) * 100));
@@ -349,7 +404,7 @@ function callMarkup(negotiation) {
       <section class="card">
         <div class="card-head">
           <div>
-            <span class="section-tag">Live sandbox call</span>
+            <span class="section-tag">${isLivePhone ? "Live phone call" : "Live sandbox call"}</span>
             <h1 class="page-title">${escapeHtml(title)}</h1>
           </div>
           <div class="meta-chip">${escapeHtml(negotiation.status.replace("-", " "))}</div>
@@ -365,7 +420,7 @@ function callMarkup(negotiation) {
 
         <div class="call-stats">
           <div class="metric-card stat"><span>Current objective</span><strong>${escapeHtml(negotiation.currentObjective)}</strong></div>
-          <div class="metric-card stat"><span>Sandbox call</span><strong>${escapeHtml(displayCallStatus)}</strong></div>
+          <div class="metric-card stat"><span>${isLivePhone ? "Phone mode" : "Sandbox call"}</span><strong>${escapeHtml(displayCallStatus)}</strong></div>
           <div class="metric-card stat"><span>Best live offer</span><strong>${negotiation.bestOfferMonthly ? `${money(negotiation.bestOfferMonthly)}/mo` : "Waiting for rep offer"}</strong></div>
         </div>
 
@@ -379,6 +434,14 @@ function callMarkup(negotiation) {
 
         ${negotiation.call.error ? `<div class="error">${escapeHtml(negotiation.call.error)}</div>` : ""}
         ${state.callError ? `<div class="error">${escapeHtml(state.callError)}</div>` : ""}
+        ${sandboxDisclosure(negotiation)}
+        ${isLivePhone && negotiation.status === "in-progress" ? `
+          <div class="live-cue">
+            <span class="pulse-dot"></span>
+            <strong>${state.turns.at(-1)?.role === "negotiator" ? "AI speaking" : "Waiting for the rep"}</strong>
+            <p>You are speaking as the carrier rep. Keep the answer realistic so the deterministic policy can classify the next move.</p>
+          </div>
+        ` : ""}
         ${negotiation.status === "completed" ? `<div class="banner">Negotiation finished. Redirecting to the result page.</div>` : ""}
 
         <div class="transcript-list">
@@ -409,8 +472,9 @@ function callMarkup(negotiation) {
           </div>
           <div class="scenario-strip">
             <strong>Why this path was selected</strong>
-            <p>The backend picked this scenario from extracted bill facts, not from open-ended model improvisation.</p>
+            <p>${escapeHtml(proof?.policySummary || "The backend picked this scenario from extracted bill facts, not from open-ended model improvisation.")}</p>
           </div>
+          ${proof ? strategyProofMarkup(proof) : ""}
         </section>
 
         <section class="card">
@@ -442,9 +506,14 @@ function callMarkup(negotiation) {
 
 function resultMarkup(negotiation) {
   const result = negotiation.result;
+  const proof = negotiation.strategyProof;
   const callLabel =
     negotiation.call.error ||
-    (negotiation.call.mode === "sandbox" ? negotiation.call.status.replace("-", " ") : "simulated flow");
+    (negotiation.call.mode === "conversation_relay"
+      ? "live phone demo"
+      : negotiation.call.mode === "sandbox"
+        ? negotiation.call.status.replace("-", " ")
+        : "simulated flow");
   const savingsRate = Math.max(0, Math.min(100, Math.round((result.monthlySavings / result.currentMonthly) * 100)));
 
   return pageShell(`
@@ -470,7 +539,9 @@ function resultMarkup(negotiation) {
       <div class="result-meta">
         <div class="meta-chip">Scenario: ${escapeHtml(negotiation.scenarioLabel)}</div>
         <div class="meta-chip">Call status: ${escapeHtml(callLabel)}</div>
+        <div class="meta-chip">Target: ${money(proof?.targetMonthly || negotiation.targetMonthly)}/mo</div>
       </div>
+      ${sandboxDisclosure(negotiation)}
 
       <div class="result-math-grid">
         <div class="metric-card stat"><span>Before</span><strong>${money(result.currentMonthly)}/mo</strong></div>
@@ -529,6 +600,14 @@ function resultMarkup(negotiation) {
       </section>
     </section>
 
+    ${proof ? `
+      <section class="card" style="margin-top:24px;">
+        <span class="section-tag">Strategy proof</span>
+        <h2 class="sidebar-title">The negotiation target came from backend policy, not a frontend guess.</h2>
+        ${strategyProofMarkup(proof)}
+      </section>
+    ` : ""}
+
     <section class="card" style="margin-top:24px;">
       <div class="summary-band">
         <div>
@@ -546,6 +625,42 @@ function resultMarkup(negotiation) {
       </div>
     </section>
   `);
+}
+
+function strategyProofMarkup(proof) {
+  return `
+    <div class="proof-grid">
+      <div class="metric-card stat"><span>Market benchmark</span><strong>${money(proof.marketBenchmark)}/mo</strong></div>
+      <div class="metric-card stat"><span>Fee pressure</span><strong>${money(proof.feePressure)}</strong></div>
+      <div class="metric-card stat"><span>Target ask</span><strong>${money(proof.targetMonthly)}/mo</strong></div>
+      <div class="metric-card stat"><span>Walk-away</span><strong>${money(proof.walkAwayMonthly)}/mo</strong></div>
+    </div>
+    <div class="evidence-list">
+      ${(proof.evidence || []).map((item, index) => `
+        <div class="evidence-item">
+          <span>${String(index + 1).padStart(2, "0")}</span>
+          <p>${escapeHtml(item)}</p>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function sandboxDisclosure(negotiation) {
+  const disclosure = negotiation.strategyProof?.sandboxDisclosure ||
+    "Controlled carrier sandbox. The demo proves the bill analysis, transcript flow, and savings math without calling a real telecom provider.";
+  const modeLabel = negotiation.call.mode === "conversation_relay"
+    ? "Live phone demo"
+    : negotiation.call.mode === "sandbox"
+      ? "Twilio sandbox call"
+      : "Simulated call path";
+  return `
+    <div class="sandbox-disclosure">
+      <span class="section-tag">Sandbox disclosure</span>
+      <strong>${modeLabel}</strong>
+      <p>${escapeHtml(disclosure)}</p>
+    </div>
+  `;
 }
 
 function sampleTurns() {
@@ -626,7 +741,9 @@ function bindHomeEvents() {
     }
   });
 
-  document.getElementById("start-button")?.addEventListener("click", handleStart);
+  document.querySelectorAll("[data-start-mode]").forEach((button) => {
+    button.addEventListener("click", () => handleStart(button.dataset.startMode || "conversation_relay"));
+  });
 
   bindNavLinks();
 }
@@ -658,7 +775,7 @@ async function handleUpload(event) {
   }
 }
 
-async function handleStart() {
+async function handleStart(callMode = "conversation_relay") {
   if (!state.bill) return;
 
   state.error = "";
@@ -671,7 +788,10 @@ async function handleStart() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ billId: state.bill.id, customAngles: state.customAngles }),
     });
-    const started = await api(`/api/negotiations/${negotiation.id}/start`, { method: "POST" });
+    const started = await api(`/api/negotiations/${negotiation.id}/start`, {
+      method: "POST",
+      headers: { "X-RateDrop-Call-Mode": callMode },
+    });
     navigate(`/call/${started.id}`);
   } catch (error) {
     state.error = error.message;
@@ -758,7 +878,11 @@ function playConfetti() {
 }
 
 async function loadHome() {
-  const [demos, recent] = await Promise.allSettled([api("/api/demo-bills"), api("/api/negotiations?limit=8")]);
+  const [demos, recent, readiness] = await Promise.allSettled([
+    api("/api/demo-bills"),
+    api("/api/negotiations?limit=8"),
+    api("/api/readiness"),
+  ]);
 
   if (demos.status === "fulfilled") {
     state.demoBills = demos.value.items || [];
@@ -768,6 +892,10 @@ async function loadHome() {
 
   if (recent.status === "fulfilled") {
     state.recentNegotiations = recent.value.items || [];
+  }
+
+  if (readiness.status === "fulfilled") {
+    state.readiness = readiness.value;
   }
 
   state.homeLoaded = true;
@@ -840,7 +968,7 @@ function renderRecentList() {
     <div class="detail-block">
       <div class="detail-row">
         <h4>Recent negotiations</h4>
-        <small>Loaded from MongoDB</small>
+        <small>Loaded from persistent backend storage</small>
       </div>
       <div class="recent-grid">
         ${state.recentNegotiations.map((item) => `

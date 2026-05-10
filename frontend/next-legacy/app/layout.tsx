@@ -19,7 +19,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${sans.variable}`}>{children}</body>
+      <body className={`${sans.variable}`}>
+        <div className="ambient-bg" />
+        {children}
+      </body>
     </html>
   );
 }

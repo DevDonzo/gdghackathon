@@ -21,6 +21,20 @@ export function UploadPanel() {
   const [customAngles, setCustomAngles] = useState<string[]>([]);
   const [customInput, setCustomInput] = useState("");
 
+  // Issue Context State
+  const [companyName, setCompanyName] = useState("");
+  const [issueDescription, setIssueDescription] = useState("");
+  const [desiredOutcome, setDesiredOutcome] = useState("");
+
+  const [customerFacts, setCustomerFacts] = useState<string[]>([]);
+  const [factInput, setFactInput] = useState("");
+
+  const [constraints, setConstraints] = useState<string[]>([]);
+  const [constraintInput, setConstraintInput] = useState("");
+
+  const [completionCriteria, setCompletionCriteria] = useState<string[]>([]);
+  const [criteriaInput, setCriteriaInput] = useState("");
+
   useEffect(() => {
     async function loadHomeData() {
       try {
@@ -67,7 +81,16 @@ export function UploadPanel() {
     setError(null);
     setStarting(true);
     try {
-      const negotiation = await createNegotiation(bill.id, customAngles);
+      const issueContext = companyName || issueDescription || desiredOutcome || customerFacts.length || constraints.length || completionCriteria.length ? {
+        companyName,
+        issueDescription,
+        desiredOutcome,
+        customerFacts,
+        constraints,
+        completionCriteria
+      } : undefined;
+
+      const negotiation = await createNegotiation(bill.id, customAngles, issueContext);
       const started = await startNegotiation(negotiation.id);
       router.push(`/call/${started.id}`);
     } catch (startError) {
@@ -157,13 +180,15 @@ export function UploadPanel() {
                 key={item.id}
                 onClick={() => handleDemoBill(item.id)}
                 type="button"
-                style={{ padding: '20px', background: 'transparent' }}
+                style={{ padding: '24px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
               >
-                <div>
-                  <strong style={{ fontSize: '0.9rem' }}>{item.label}</strong>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--foreground-subtle)', marginLeft: '8px' }}>{item.provider}</span>
+                <div style={{ textAlign: 'left' }}>
+                  <strong style={{ display: 'block', fontSize: '0.95rem' }}>{item.label}</strong>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--foreground-subtle)', marginTop: '4px' }}>
+                    {item.provider} · {money(item.monthlyTotal)}/mo · {item.headlineAngle}
+                  </div>
                 </div>
-                <small style={{ fontSize: '0.6rem' }}>{loadingDemo === item.id ? "..." : "Load"}</small>
+                <small style={{ fontSize: '0.65rem', fontFamily: 'var(--font-mono)', color: 'var(--foreground-subtle)' }}>{loadingDemo === item.id ? "LOADING" : "EXECUTE"}</small>
               </button>
             ))}
           </div>
@@ -219,7 +244,7 @@ export function UploadPanel() {
                 style={{ flex: 1, height: '48px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', padding: '0 16px', fontSize: '0.9rem' }}
                 maxLength={80}
                 onChange={(event) => setCustomInput(event.target.value)}
-                placeholder="Custom leverage..."
+                placeholder="Custom leverage point..."
                 type="text"
                 value={customInput}
               />
@@ -229,9 +254,123 @@ export function UploadPanel() {
             </form>
           </div>
 
+          <div className="detail-block" style={{ marginTop: '60px' }}>
+            <span className="section-tag">Task Configuration</span>
+            <h4 style={{ marginBottom: '32px', marginTop: '8px' }}>What do you need RateDrop to fix?</h4>
+
+            <div style={{ display: 'grid', gap: '32px' }}>
+              <div>
+                <label className="intel-label">Company Name</label>
+                <input
+                  style={{ width: '100%', height: '48px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', padding: '0 16px' }}
+                  placeholder="e.g. Air Canada"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="intel-label">Problem Description</label>
+                <textarea
+                  style={{ width: '100%', minHeight: '100px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', padding: '16px', font: 'inherit' }}
+                  placeholder="e.g. My flight was cancelled and the refund has not been processed."
+                  value={issueDescription}
+                  onChange={(e) => setIssueDescription(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="intel-label">Desired Outcome</label>
+                <input
+                  style={{ width: '100%', height: '48px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', padding: '0 16px' }}
+                  placeholder="e.g. Get the refund processed or confirmed rebooking"
+                  value={desiredOutcome}
+                  onChange={(e) => setDesiredOutcome(e.target.value)}
+                />
+              </div>
+
+              {/* Customer Facts */}
+              <div>
+                <label className="intel-label">Known Facts</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+                  {customerFacts.map((fact, i) => (
+                    <span key={i} style={{ padding: '4px 10px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', fontSize: '0.8rem' }}>{fact}</span>
+                  ))}
+                </div>
+                <form style={{ display: 'flex', gap: '12px' }} onSubmit={(e) => { e.preventDefault(); if (factInput.trim()) { setCustomerFacts([...customerFacts, factInput.trim()]); setFactInput(""); }}}>
+                  <input
+                    style={{ flex: 1, height: '40px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', padding: '0 12px' }}
+                    placeholder="e.g. Booking reference ABC123"
+                    value={factInput}
+                    onChange={(e) => setFactInput(e.target.value)}
+                  />
+                  <button type="submit" style={{ padding: '0 16px', background: 'var(--paper-border)', borderRadius: '2px', fontSize: '0.8rem', cursor: 'pointer' }}>Add</button>
+                </form>
+              </div>
+
+              {/* Constraints */}
+              <div>
+                <label className="intel-label">Constraints</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+                  {constraints.map((c, i) => (
+                    <span key={i} style={{ padding: '4px 10px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', fontSize: '0.8rem' }}>{c}</span>
+                  ))}
+                </div>
+                <form style={{ display: 'flex', gap: '12px' }} onSubmit={(e) => { e.preventDefault(); if (constraintInput.trim()) { setConstraints([...constraints, constraintInput.trim()]); setConstraintInput(""); }}}>
+                  <input
+                    style={{ flex: 1, height: '40px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', padding: '0 12px' }}
+                    placeholder="e.g. Do not accept a vague callback"
+                    value={constraintInput}
+                    onChange={(e) => setConstraintInput(e.target.value)}
+                  />
+                  <button type="submit" style={{ padding: '0 16px', background: 'var(--paper-border)', borderRadius: '2px', fontSize: '0.8rem', cursor: 'pointer' }}>Add</button>
+                </form>
+              </div>
+
+              {/* Completion Criteria */}
+              <div>
+                <label className="intel-label">Completion Criteria</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+                  {completionCriteria.map((c, i) => (
+                    <span key={i} style={{ padding: '4px 10px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', fontSize: '0.8rem' }}>{c}</span>
+                  ))}
+                </div>
+                <form style={{ display: 'flex', gap: '12px' }} onSubmit={(e) => { e.preventDefault(); if (criteriaInput.trim()) { setCompletionCriteria([...completionCriteria, criteriaInput.trim()]); setCriteriaInput(""); }}}>
+                  <input
+                    style={{ flex: 1, height: '40px', background: 'var(--bg-subtle)', border: '1px solid var(--paper-border)', borderRadius: '2px', padding: '0 12px' }}
+                    placeholder="e.g. Refund is processed or reference number secured"
+                    value={criteriaInput}
+                    onChange={(e) => setCriteriaInput(e.target.value)}
+                  />
+                  <button type="submit" style={{ padding: '0 16px', background: 'var(--paper-border)', borderRadius: '2px', fontSize: '0.8rem', cursor: 'pointer' }}>Add</button>
+                </form>
+              </div>
+            </div>
+          </div>
+
           <button className="primary-button" disabled={starting} onClick={handleStart} type="button" style={{ marginTop: '80px' }}>
             {starting ? "Initializing Voice..." : "Run Negotiation"}
           </button>
+        </div>
+      ) : null}
+
+      {recentNegotiations.length > 0 ? (
+        <div style={{ marginTop: '120px', borderTop: '1px solid var(--paper-border)', paddingTop: '80px' }}>
+          <h4 style={{ marginBottom: '40px' }}>History</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {recentNegotiations.map((item) => (
+              <Link href={`/result/${item.id}`} key={item.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '20px 24px', background: 'transparent', borderRadius: '4px', border: '1px solid var(--paper-border)' }}>
+                <div>
+                  <strong style={{ display: 'block', fontSize: '0.95rem', letterSpacing: '-0.02em' }}>{item.provider}</strong>
+                  <small style={{ color: 'var(--foreground-subtle)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: '4px', display: 'block' }}>{item.scenarioLabel}</small>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ display: 'block', fontSize: '1rem', fontWeight: '600' }}>{money(item.currentMonthly)}</span>
+                  <small style={{ color: 'var(--foreground-muted)', fontSize: '0.75rem', fontFamily: 'var(--font-mono)' }}>{historyOutcome(item)}</small>
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
       ) : null}
     </div>

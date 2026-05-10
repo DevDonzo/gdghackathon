@@ -39,6 +39,18 @@ export type NegotiationResult = {
   transcriptSummary: string[];
 };
 
+export type IssueContext = {
+  companyName: string;
+  taskType: "telecom_negotiation" | "billing_dispute" | "travel_support" | "account_support" | "generic_support";
+  problemSummary: string;
+  desiredOutcome: string;
+  customerFacts: string[];
+  constraints: string[];
+  completionCriteria: string[];
+  successSignals: string[];
+  escalationTerms: string[];
+};
+
 export type Negotiation = {
   id: string;
   billId: string;
@@ -54,6 +66,7 @@ export type Negotiation = {
   currentObjective: string;
   call: CallState;
   result: NegotiationResult | null;
+  issueContext?: IssueContext;
   createdAt: string;
   startedAt: string | null;
   endedAt: string | null;

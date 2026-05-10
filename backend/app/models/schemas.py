@@ -48,6 +48,22 @@ class BillUploadResponse(BaseModel):
 class NegotiationCreateRequest(BaseModel):
     billId: str
     customAngles: list[str] = Field(default_factory=list)
+    issueDescription: str | None = None
+    desiredOutcome: str | None = None
+    companyName: str | None = None
+    customerFacts: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    completionCriteria: list[str] = Field(default_factory=list)
+
+
+class CompanyLookupRequest(BaseModel):
+    companyName: str | None = None
+    issueDescription: str | None = None
+    desiredOutcome: str | None = None
+    billId: str | None = None
+    customerFacts: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    completionCriteria: list[str] = Field(default_factory=list)
 
 
 class CallMetadata(BaseModel):
@@ -55,7 +71,7 @@ class CallMetadata(BaseModel):
     to: str | None = None
     fromNumber: str | None = None
     status: str = "not-started"
-    mode: Literal["sandbox", "simulated"] = "simulated"
+    mode: Literal["sandbox", "simulated", "conversation_relay"] = "simulated"
     error: str | None = None
 
 
@@ -80,6 +96,29 @@ class NegotiationResult(BaseModel):
     transcriptSummary: list[str]
 
 
+class StrategyProof(BaseModel):
+    marketBenchmark: float
+    feePressure: float
+    targetMonthly: float
+    walkAwayMonthly: float
+    policySummary: str
+    evidence: list[str]
+    sandboxDisclosure: str
+
+
+class IssueContext(BaseModel):
+    companyName: str
+    taskType: Literal["telecom_negotiation", "billing_dispute", "travel_support", "account_support", "generic_support"]
+    problemSummary: str
+    desiredOutcome: str
+    customerFacts: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    completionCriteria: list[str] = Field(default_factory=list)
+    successSignals: list[str] = Field(default_factory=list)
+    escalationTerms: list[str] = Field(default_factory=list)
+    contactLookup: dict[str, Any] | None = None
+
+
 class NegotiationResponse(BaseModel):
     id: str
     billId: str
@@ -95,6 +134,8 @@ class NegotiationResponse(BaseModel):
     currentObjective: str
     call: CallMetadata
     result: NegotiationResult | None = None
+    strategyProof: StrategyProof | None = None
+    issueContext: IssueContext | None = None
     createdAt: datetime
     startedAt: datetime | None = None
     endedAt: datetime | None = None
@@ -138,6 +179,8 @@ def serialize_turn(document: dict[str, Any]) -> dict[str, Any]:
 def serialize_negotiation(document: dict[str, Any]) -> NegotiationResponse:
     call = CallMetadata.model_validate(document.get("call", {}))
     result = document.get("result")
+    strategy_proof = document.get("strategyProof")
+    issue_context = document.get("issueContext")
     return NegotiationResponse(
         id=str(document["_id"]),
         billId=str(document["billId"]),
@@ -153,6 +196,8 @@ def serialize_negotiation(document: dict[str, Any]) -> NegotiationResponse:
         currentObjective=document.get("currentObjective", "Preparing call"),
         call=call,
         result=NegotiationResult.model_validate(result) if result else None,
+        strategyProof=StrategyProof.model_validate(strategy_proof) if strategy_proof else None,
+        issueContext=IssueContext.model_validate(issue_context) if issue_context else None,
         createdAt=document["createdAt"],
         startedAt=document.get("startedAt"),
         endedAt=document.get("endedAt"),

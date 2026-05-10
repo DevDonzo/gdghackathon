@@ -195,7 +195,11 @@ export function CallDashboard({ negotiationId }: Props) {
               <div className="empty-state">Dialing...</div>
             ) : null}
             {turns.map((turn, index) => (
-              <article className={`transcript-card role-${turn.role}`} key={`${turn.createdAt}-${index}`}>
+              <article
+                className={`transcript-card role-${turn.role}`}
+                key={`${turn.createdAt}-${index}`}
+                style={{ animation: 'fadeIn 500ms cubic-bezier(0.2, 0, 0, 1) both' }}
+              >
                 <div className="transcript-head">
                   <strong>{turn.role === "negotiator" ? "RateDrop" : "Carrier Rep"}</strong>
                   <span>{turn.intent.replaceAll("_", " ")}</span>
@@ -213,23 +217,56 @@ export function CallDashboard({ negotiationId }: Props) {
         </div>
 
         <aside className="sidebar-stack">
-          <div className="card sidebar-panel" style={{ background: 'var(--bg-subtle)' }}>
-            <span className="section-tag">Scenario</span>
-            <h3>{negotiation.scenarioLabel}</h3>
-            <div className="sidebar-stats">
-              <div>
-                <span>Current Bill</span>
-                <strong>{money(negotiation.currentMonthly)}</strong>
-              </div>
-              <div>
-                <span>Target</span>
-                <strong>{money(negotiation.targetMonthly)}</strong>
+          {negotiation.issueContext ? (
+            <div className="card sidebar-panel" style={{ background: 'var(--bg-subtle)' }}>
+              <span className="section-tag">Issue Context</span>
+              <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>{negotiation.issueContext.companyName}</h3>
+              <div style={{ display: 'grid', gap: '20px' }}>
+                <div>
+                  <label className="intel-label">Task Type</label>
+                  <strong style={{ fontSize: '0.85rem' }}>{negotiation.issueContext.taskType.replaceAll("_", " ")}</strong>
+                </div>
+                <div>
+                  <label className="intel-label">Problem</label>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--foreground-muted)' }}>{negotiation.issueContext.problemSummary}</p>
+                </div>
+                <div>
+                  <label className="intel-label">Desired Outcome</label>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--foreground-muted)' }}>{negotiation.issueContext.desiredOutcome}</p>
+                </div>
+                {negotiation.issueContext.completionCriteria.length > 0 && (
+                  <div>
+                    <label className="intel-label">Success Criteria</label>
+                    <ul style={{ listStyle: 'none', padding: 0, marginTop: '8px', display: 'grid', gap: '8px' }}>
+                      {negotiation.issueContext.completionCriteria.map((c, i) => (
+                        <li key={i} style={{ fontSize: '0.8rem', color: 'var(--foreground-muted)', display: 'flex', gap: '8px' }}>
+                          <span style={{ color: 'var(--success)' }}>•</span> {c}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
-            <p style={{ fontSize: '0.8rem', color: 'var(--foreground-muted)', marginTop: '16px' }}>
-              Deterministic path selected based on extracted bill facts.
-            </p>
-          </div>
+          ) : (
+            <div className="card sidebar-panel" style={{ background: 'var(--bg-subtle)' }}>
+              <span className="section-tag">Scenario</span>
+              <h3>{negotiation.scenarioLabel}</h3>
+              <div className="sidebar-stats">
+                <div>
+                  <span>Current Bill</span>
+                  <strong>{money(negotiation.currentMonthly)}</strong>
+                </div>
+                <div>
+                  <span>Target</span>
+                  <strong>{money(negotiation.targetMonthly)}</strong>
+                </div>
+              </div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--foreground-muted)', marginTop: '16px' }}>
+                Deterministic path selected based on extracted bill facts.
+              </p>
+            </div>
+          )}
 
           <div className="card sidebar-panel" style={{ border: '1px solid var(--paper-border)' }}>
             <span className="section-tag">Session Info</span>

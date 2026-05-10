@@ -32,7 +32,7 @@ def get_database() -> Database:
 
 
 def get_collections() -> dict[str, object]:
-    if _using_memory_db:
+    if _using_local_db():
         return get_memory_collections()
 
     db = get_database()
@@ -46,12 +46,12 @@ def get_collections() -> dict[str, object]:
 def get_memory_collections() -> dict[str, MemoryCollection]:
     global _memory_collections
     if _memory_collections is None:
-        _memory_collections = create_memory_collections()
+        _memory_collections = create_memory_collections(get_settings().local_db_path)
     return _memory_collections
 
 
 def database_mode() -> str:
-    return "memory" if _using_memory_db else "mongo"
+    return "local" if _using_local_db() else "mongo"
 
 
 def _switch_to_memory_db(error: Exception) -> None:
@@ -60,12 +60,16 @@ def _switch_to_memory_db(error: Exception) -> None:
     if not settings.memory_db_allowed:
         raise error
     _using_memory_db = True
-    logger.warning("MongoDB is unavailable; using development in-memory storage. Error: %s", error)
+    logger.warning(
+        "MongoDB is unavailable; using local persistent storage at %s. Error: %s",
+        settings.local_db_path,
+        error,
+    )
 
 
 def ensure_indexes() -> None:
     global _using_memory_db
-    if not _using_memory_db:
+    if not _using_local_db():
         try:
             get_database().command("ping")
         except PyMongoError as error:
@@ -76,3 +80,7 @@ def ensure_indexes() -> None:
     collections["negotiations"].create_index([("createdAt", DESCENDING)])
     collections["negotiations"].create_index([("status", ASCENDING), ("createdAt", DESCENDING)])
     collections["turns"].create_index([("negotiationId", ASCENDING), ("createdAt", ASCENDING)])
+
+
+def _using_local_db() -> bool:
+    return _using_memory_db or get_settings().normalized_database_mode == "local"

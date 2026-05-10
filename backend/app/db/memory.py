@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
+from pathlib import Path
 from threading import RLock
 from typing import Any, Iterable
 
 from bson import ObjectId
+from bson import json_util
 
 
 @dataclass(slots=True)
@@ -36,9 +38,11 @@ class MemoryCursor:
 
 
 class MemoryCollection:
-    def __init__(self) -> None:
+    def __init__(self, storage_path: Path | None = None) -> None:
+        self._storage_path = storage_path
         self._documents: list[dict[str, Any]] = []
         self._lock = RLock()
+        self._load()
 
     def create_index(self, *_args: Any, **_kwargs: Any) -> str:
         return "memory_index"
@@ -49,6 +53,7 @@ class MemoryCollection:
             stored.setdefault("_id", ObjectId())
             document.setdefault("_id", stored["_id"])
             self._documents.append(stored)
+            self._persist()
             return MemoryInsertOneResult(inserted_id=stored["_id"])
 
     def find_one(self, filter_query: dict[str, Any]) -> dict[str, Any] | None:
@@ -75,6 +80,7 @@ class MemoryCollection:
                     updated = deepcopy(document)
                     _apply_update(updated, update)
                     self._documents[index] = updated
+                    self._persist()
                     return deepcopy(updated if _return_after(return_document) else document)
         return None
 
@@ -85,19 +91,39 @@ class MemoryCollection:
                     updated = deepcopy(document)
                     _apply_update(updated, update)
                     self._documents[index] = updated
+                    self._persist()
                     return
 
     def count_documents(self, filter_query: dict[str, Any]) -> int:
         with self._lock:
             return sum(1 for document in self._documents if _matches(document, filter_query))
 
+    def _load(self) -> None:
+        if not self._storage_path or not self._storage_path.exists():
+            return
+        raw = self._storage_path.read_text(encoding="utf-8")
+        if raw.strip():
+            self._documents = json_util.loads(raw)
 
-def create_memory_collections() -> dict[str, MemoryCollection]:
+    def _persist(self) -> None:
+        if not self._storage_path:
+            return
+        self._storage_path.parent.mkdir(parents=True, exist_ok=True)
+        self._storage_path.write_text(json_util.dumps(self._documents), encoding="utf-8")
+
+
+def create_memory_collections(storage_dir: Path | None = None) -> dict[str, MemoryCollection]:
     return {
-        "bills": MemoryCollection(),
-        "negotiations": MemoryCollection(),
-        "turns": MemoryCollection(),
+        "bills": MemoryCollection(_storage_path(storage_dir, "bill_documents")),
+        "negotiations": MemoryCollection(_storage_path(storage_dir, "negotiations")),
+        "turns": MemoryCollection(_storage_path(storage_dir, "transcript_turns")),
     }
+
+
+def _storage_path(storage_dir: Path | None, collection: str) -> Path | None:
+    if storage_dir is None:
+        return None
+    return storage_dir / f"{collection}.json"
 
 
 def _matches(document: dict[str, Any], filter_query: dict[str, Any]) -> bool:

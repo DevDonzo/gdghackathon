@@ -184,7 +184,15 @@ export function ResultSummary({ negotiationId }: Props) {
         </div>
 
         <div className="card result-panel">
-          <span className="section-tag">Negotiation Highlights</span>
+          <span className="section-tag">
+            {negotiation.issueContext ? "Task Outcome" : "What worked"}
+          </span>
+          {negotiation.issueContext && (
+            <div style={{ marginBottom: '32px', borderBottom: '1px solid var(--paper-border)', paddingBottom: '24px' }}>
+              <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>{negotiation.issueContext.companyName}</h3>
+              <p style={{ fontSize: '0.9rem', color: 'var(--foreground-muted)', lineHeight: '1.5' }}>{negotiation.issueContext.problemSummary}</p>
+            </div>
+          )}
           <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
             {result.transcriptSummary.map((item) => (
               <li key={item} style={{ display: 'flex', gap: '12px', fontSize: '0.9rem', color: 'var(--foreground-muted)' }}>
@@ -193,6 +201,12 @@ export function ResultSummary({ negotiationId }: Props) {
               </li>
             ))}
           </ul>
+          {negotiation.issueContext && (
+            <div style={{ marginTop: '32px', borderTop: '1px solid var(--paper-border)', paddingTop: '24px' }}>
+              <label className="intel-label">Outcome Achieved</label>
+              <p style={{ fontSize: '0.9rem', color: 'var(--foreground)', marginTop: '8px' }}>{negotiation.issueContext.desiredOutcome}</p>
+            </div>
+          )}
         </div>
       </section>
 

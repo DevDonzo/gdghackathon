@@ -33,7 +33,15 @@ export function LandingTranscript() {
       </div>
       <div className="transcript-stream" style={{ gap: '12px' }}>
         {TURNS.map((turn, index) => (
-          <article className={`transcript-card role-${turn.role}`} key={`${turn.role}-${index}`} style={{ padding: '12px', fontSize: '0.85rem' }}>
+          <article
+            className={`transcript-card role-${turn.role}`}
+            key={`${turn.role}-${index}`}
+            style={{
+              padding: '12px',
+              fontSize: '0.85rem',
+              animation: `fadeIn 600ms cubic-bezier(0.2, 0, 0, 1) ${index * 150}ms both`
+            }}
+          >
             <div className="transcript-head" style={{ marginBottom: '4px' }}>
               <strong>{turn.role === "negotiator" ? "RateDrop" : "Carrier rep"}</strong>
             </div>
