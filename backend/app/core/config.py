@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     database_mode: str = Field(default="local", alias="RATEDROP_DATABASE_MODE")
     gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     gemini_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_MODEL")
+    agent_mode: str = Field(default="strands", alias="RATEDROP_AGENT_MODE")
     tavily_api_key: str | None = Field(default=None, alias="TAVILY_API_KEY")
     twilio_account_sid: str | None = Field(default=None, alias="TWILIO_ACCOUNT_SID")
     twilio_auth_token: str | None = Field(default=None, alias="TWILIO_AUTH_TOKEN")
@@ -60,6 +61,11 @@ class Settings(BaseSettings):
     def normalized_database_mode(self) -> str:
         mode = self.database_mode.strip().lower()
         return mode if mode in {"local", "mongo"} else "local"
+
+    @property
+    def normalized_agent_mode(self) -> str:
+        mode = self.agent_mode.strip().lower()
+        return mode if mode in {"disabled", "strands"} else "disabled"
 
 
 @lru_cache(maxsize=1)

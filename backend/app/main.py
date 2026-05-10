@@ -92,6 +92,7 @@ def readiness(request: Request) -> JSONResponse:
             "status": "ok" if mongo_ready else "degraded",
             "database": {"mode": database_mode(), "ready": mongo_ready},
             "gemini": {"configured": bool(settings.gemini_api_key), "model": settings.gemini_model},
+            "agent": {"mode": settings.normalized_agent_mode, "provider": "strands"},
             "tavily": {"configured": bool(settings.tavily_api_key)},
             "twilio": twilio_readiness(request),
         }

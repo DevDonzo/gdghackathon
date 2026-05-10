@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from backend.app.db.mongo import ensure_indexes, get_collections
 from backend.app.main import app
+from backend.app.core.config import get_settings
 from backend.app.services.extraction import DEMO_BILLS
 from backend.app.services.issue_context import build_issue_context
 from backend.app.services.negotiation import create_negotiation_document
@@ -52,6 +53,10 @@ def drain_text_or_end(websocket) -> list[dict]:
 
 
 def main() -> int:
+    settings = get_settings()
+    original_agent_mode = settings.agent_mode
+    settings.agent_mode = "disabled"
+
     negotiation = negotiation_fixture()
 
     monthly, credit = parse_offer_values("I can reduce it to 70 dollars a month.", negotiation["currentMonthly"])
@@ -209,6 +214,7 @@ def main() -> int:
     assert_equal(support_transcript_count, 7, "support transcript count")
 
     print("live policy tests passed")
+    settings.agent_mode = original_agent_mode
     return 0
 
 

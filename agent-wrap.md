@@ -15,8 +15,8 @@ fallback.
 
 **Repo**: https://github.com/strands-agents/sdk-python  
 **License**: Apache 2.0  
-**Install**: `pip install strands-agents`  
-**LLM adapter**: `pip install litellm` (required for Gemini 2.5 Flash)
+**Install**: `pip install 'strands-agents[gemini]'`
+**LLM adapter**: native Strands Gemini provider (`strands.models.gemini.GeminiModel`)
 
 Strands is the right choice for this project for four reasons:
 
@@ -24,9 +24,9 @@ Strands is the right choice for this project for four reasons:
    zero boilerplate. The agent loops over tool calls until it produces a final text response. This
    maps directly onto the negotiation turn loop RateDrop already has.
 
-2. **LLM-agnostic.** Strands uses LiteLLM as its model layer, which means it can drive Gemini 2.5
-   Flash (`gemini/gemini-2.5-flash`) with the same `GEMINI_API_KEY` the project already sets. No
-   new API keys, no new accounts.
+2. **Gemini-native while still agentic.** Strands has a first-party Gemini model provider, so it
+   can drive Gemini 2.5 Flash with the same `GEMINI_API_KEY` the project already sets. No new API
+   keys, no new accounts.
 
 3. **Apache 2.0, no usage fees.** Correct for a hackathon.
 
@@ -39,14 +39,13 @@ Strands is the right choice for this project for four reasons:
 **License**: Apache 2.0  
 **Install**: `pip install google-adk`
 
-Google ADK is the native path if the team wants zero LiteLLM overhead. It drives `gemini-2.5-flash`
-directly via the Google GenAI SDK that is already a transitive dependency of this project.
+Google ADK is another native path for Gemini. It drives `gemini-2.5-flash` directly via the Google
+GenAI SDK that is already a dependency of this project.
 `FunctionTool` wraps any Python callable. `LlmAgent` runs the tool loop. The integration pattern
 is identical to Strands; only the import names change.
 
-**Use ADK instead of Strands if**: the team wants to cut one dependency (`litellm`) and is
-comfortable tying the agent directly to Google's SDK. Use Strands if flexibility to swap models
-(e.g., Claude 3.5 Sonnet for a demo) matters more.
+**Use ADK instead of Strands if**: the team wants Google's agent framework specifically. Use
+Strands if a lightweight, tool-first agent loop is the priority.
 
 ### Not recommended: Anthropic Claude Agent SDK
 
@@ -155,18 +154,19 @@ from __future__ import annotations
 from typing import Any
 
 from strands import Agent, tool
-from strands.models import LiteLLMModel
+from strands.models.gemini import GeminiModel
 
 from backend.app.services.negotiation_live import advance_live_policy, initial_live_state
 
 # ── model ─────────────────────────────────────────────────────────────────────
 
-def _make_model() -> LiteLLMModel:
+def _make_model() -> GeminiModel:
     from backend.app.core.config import get_settings
     settings = get_settings()
-    return LiteLLMModel(
-        model_id="gemini/gemini-2.5-flash",
-        params={"api_key": settings.gemini_api_key, "temperature": 0.4},
+    return GeminiModel(
+        client_args={"api_key": settings.gemini_api_key},
+        model_id="gemini-2.5-flash",
+        params={"temperature": 0.4, "max_output_tokens": 220},
     )
 
 
@@ -342,15 +342,14 @@ else:
 Add one field to the `Settings` class:
 
 ```python
-agent_mode: str = Field(default="disabled", alias="RATEDROP_AGENT_MODE")
+agent_mode: str = Field(default="strands", alias="RATEDROP_AGENT_MODE")
 # Values: "disabled" (use deterministic engine), "strands" (use agent)
 ```
 
 ### `requirements.txt` / `pyproject.toml`
 
 ```
-strands-agents>=0.1.0
-litellm>=1.40.0
+strands-agents[gemini]>=1.0.0
 ```
 
 Both are pip-installable, Apache 2.0, no usage fees.
@@ -361,11 +360,11 @@ Both are pip-installable, Apache 2.0, no usage fees.
 
 | Variable | Values | Default | Effect |
 |---|---|---|---|
-| `RATEDROP_AGENT_MODE` | `disabled`, `strands` | `disabled` | Enables agent phrasing |
-| `GEMINI_API_KEY` | string | (already required) | Used by LiteLLM → Gemini |
+| `RATEDROP_AGENT_MODE` | `strands`, `disabled` | `strands` | Uses Strands agent phrasing for live calls |
+| `GEMINI_API_KEY` | string | (already required) | Used by Strands Gemini provider |
 
-No new API keys are needed. LiteLLM passes the existing `GEMINI_API_KEY` through to the Gemini
-2.5 Flash endpoint.
+No new API keys are needed. Strands passes the existing `GEMINI_API_KEY` through to Gemini 2.5
+Flash.
 
 ---
 
@@ -421,22 +420,22 @@ These are hard boundaries enforced by tool design, not by prompt engineering alo
 
 The agent has two explicit fallback paths:
 
-1. **Tool loop fails (agent returns without calling tools).** The `_pending_decision` dict is
-   empty. `run_negotiator_agent()` catches this and calls `advance_live_policy()` directly,
-   returning the deterministic result.
+1. **Tool loop fails (agent returns without calling tools).** The request-scoped pending decision
+   dict is empty. `run_negotiator_agent()` catches this and calls `advance_live_policy()` directly,
+   returning the deterministic result so a live phone call does not drop.
 
-2. **`finalize_response` not called.** `_agent_text` is not in `_pending_decision`. The function
-   calls `phrase_live_action()` to fill in `decision["text"]`, so the turn still completes
-   correctly.
+2. **`finalize_response` not called.** `_agent_text` is not in the request-scoped pending decision.
+   The function calls the deterministic telecom or support phrase helper to fill in
+   `decision["text"]`, so the turn still completes correctly.
 
-Setting `RATEDROP_AGENT_MODE=disabled` (the default) bypasses the agent entirely and uses the
-original code path with zero overhead.
+Setting `RATEDROP_AGENT_MODE=disabled` bypasses the agent and uses the original code path. The
+default is `strands`, so live ConversationRelay turns are agent-first.
 
 ---
 
 ## What changes for the demo
 
-With `RATEDROP_AGENT_MODE=strands`:
+By default, with `RATEDROP_AGENT_MODE=strands`:
 
 | Before (hardcoded) | After (agent-generated) |
 |---|---|
@@ -450,12 +449,12 @@ The negotiation outcome — whether we accept, counter, or walk — is identical
 
 ## Implementation order
 
-1. `pip install strands-agents litellm` into the venv.
+1. `pip install 'strands-agents[gemini]'` into the venv.
 2. Add `agent_mode` field to `backend/app/core/config.py`.
 3. Create `backend/app/agent/__init__.py` (empty).
 4. Create `backend/app/agent/negotiator_agent.py` (full file above).
 5. Modify `backend/app/services/conversation_relay.py` (2-line conditional swap).
-6. Set `RATEDROP_AGENT_MODE=strands` in `.env`.
+6. Keep `RATEDROP_AGENT_MODE=strands` in `.env` or omit it because `strands` is the default.
 7. Run the server and test with a simulated call — both `conversation_relay` mode and `simulated`
    mode should work (simulated mode bypasses the agent entirely, it only applies in
    `conversation_relay` mode).
