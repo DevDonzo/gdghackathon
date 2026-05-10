@@ -92,7 +92,14 @@ def readiness(request: Request) -> JSONResponse:
             "status": "ok" if mongo_ready else "degraded",
             "database": {"mode": database_mode(), "ready": mongo_ready},
             "gemini": {"configured": bool(settings.gemini_api_key), "model": settings.gemini_model},
-            "agent": {"mode": settings.normalized_agent_mode, "provider": "strands"},
+            "agent": {
+                "mode": settings.normalized_agent_mode,
+                "provider": "strands",
+                "modelProvider": settings.normalized_agent_model_provider,
+                "modelId": settings.agent_model_id,
+                "fallbackModelId": settings.agent_fallback_model_id if settings.normalized_agent_model_provider == "bedrock" else None,
+                "region": settings.agent_aws_region if settings.normalized_agent_model_provider == "bedrock" else None,
+            },
             "tavily": {"configured": bool(settings.tavily_api_key)},
             "twilio": twilio_readiness(request),
         }

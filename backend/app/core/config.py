@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     gemini_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_MODEL")
     agent_mode: str = Field(default="strands", alias="RATEDROP_AGENT_MODE")
+    agent_model_provider: str = Field(default="bedrock", alias="RATEDROP_AGENT_MODEL_PROVIDER")
+    agent_model_id: str = Field(default="amazon.nova-micro-v1:0", alias="RATEDROP_AGENT_MODEL_ID")
+    agent_fallback_model_id: str = Field(default="amazon.nova-lite-v1:0", alias="RATEDROP_AGENT_FALLBACK_MODEL_ID")
+    agent_aws_region: str = Field(default="us-east-1", alias="RATEDROP_AGENT_AWS_REGION")
     tavily_api_key: str | None = Field(default=None, alias="TAVILY_API_KEY")
     twilio_account_sid: str | None = Field(default=None, alias="TWILIO_ACCOUNT_SID")
     twilio_auth_token: str | None = Field(default=None, alias="TWILIO_AUTH_TOKEN")
@@ -66,6 +70,11 @@ class Settings(BaseSettings):
     def normalized_agent_mode(self) -> str:
         mode = self.agent_mode.strip().lower()
         return mode if mode in {"disabled", "strands"} else "disabled"
+
+    @property
+    def normalized_agent_model_provider(self) -> str:
+        provider = self.agent_model_provider.strip().lower()
+        return provider if provider in {"bedrock", "gemini"} else "bedrock"
 
 
 @lru_cache(maxsize=1)

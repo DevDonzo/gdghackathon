@@ -16,7 +16,7 @@ fallback.
 **Repo**: https://github.com/strands-agents/sdk-python  
 **License**: Apache 2.0  
 **Install**: `pip install 'strands-agents[gemini]'`
-**LLM adapter**: native Strands Gemini provider (`strands.models.gemini.GeminiModel`)
+**LLM adapter**: native Strands Bedrock provider (`strands.models.bedrock.BedrockModel`)
 
 Strands is the right choice for this project for four reasons:
 
@@ -24,9 +24,10 @@ Strands is the right choice for this project for four reasons:
    zero boilerplate. The agent loops over tool calls until it produces a final text response. This
    maps directly onto the negotiation turn loop RateDrop already has.
 
-2. **Gemini-native while still agentic.** Strands has a first-party Gemini model provider, so it
-   can drive Gemini 2.5 Flash with the same `GEMINI_API_KEY` the project already sets. No new API
-   keys, no new accounts.
+2. **Bedrock-native while still agentic.** Strands has a first-party Bedrock model provider, so it
+   can drive Amazon Nova through the AWS CLI/account credentials already configured for the demo.
+   The default primary model is `amazon.nova-micro-v1:0`, with `amazon.nova-lite-v1:0` as the
+   automatic fallback if Micro fails a tool-use turn.
 
 3. **Apache 2.0, no usage fees.** Correct for a hackathon.
 
@@ -115,7 +116,7 @@ negotiator_agent.run(rep_text, negotiation)
         │         └─ returns: {action, objective, completed, accepted,
         │                      finalMonthly, bestCredit, nextState, …}
         │
-        │  LLM (Gemini 2.5 Flash) generates spoken response text
+        │  LLM (Amazon Nova via Bedrock) generates spoken response text
         │  constrained by the determined action
         │
         ├─ tool: finalize_response(negotiation_id, action, text, completed)
@@ -154,19 +155,20 @@ from __future__ import annotations
 from typing import Any
 
 from strands import Agent, tool
-from strands.models.gemini import GeminiModel
+from strands.models.bedrock import BedrockModel
 
 from backend.app.services.negotiation_live import advance_live_policy, initial_live_state
 
 # ── model ─────────────────────────────────────────────────────────────────────
 
-def _make_model() -> GeminiModel:
+def _make_model() -> BedrockModel:
     from backend.app.core.config import get_settings
     settings = get_settings()
-    return GeminiModel(
-        client_args={"api_key": settings.gemini_api_key},
-        model_id="gemini-2.5-flash",
-        params={"temperature": 0.4, "max_output_tokens": 220},
+    return BedrockModel(
+        model_id=settings.agent_model_id,
+        region_name=settings.agent_aws_region,
+        temperature=0.4,
+        max_tokens=220,
     )
 
 
@@ -343,6 +345,10 @@ Add one field to the `Settings` class:
 
 ```python
 agent_mode: str = Field(default="strands", alias="RATEDROP_AGENT_MODE")
+agent_model_provider: str = Field(default="bedrock", alias="RATEDROP_AGENT_MODEL_PROVIDER")
+agent_model_id: str = Field(default="amazon.nova-micro-v1:0", alias="RATEDROP_AGENT_MODEL_ID")
+agent_fallback_model_id: str = Field(default="amazon.nova-lite-v1:0", alias="RATEDROP_AGENT_FALLBACK_MODEL_ID")
+agent_aws_region: str = Field(default="us-east-1", alias="RATEDROP_AGENT_AWS_REGION")
 # Values: "disabled" (use deterministic engine), "strands" (use agent)
 ```
 
@@ -361,10 +367,15 @@ Both are pip-installable, Apache 2.0, no usage fees.
 | Variable | Values | Default | Effect |
 |---|---|---|---|
 | `RATEDROP_AGENT_MODE` | `strands`, `disabled` | `strands` | Uses Strands agent phrasing for live calls |
-| `GEMINI_API_KEY` | string | (already required) | Used by Strands Gemini provider |
+| `RATEDROP_AGENT_MODEL_PROVIDER` | `bedrock`, `gemini` | `bedrock` | Chooses the Strands model provider |
+| `RATEDROP_AGENT_MODEL_ID` | Bedrock model ID | `amazon.nova-micro-v1:0` | Primary cheapest Nova text model |
+| `RATEDROP_AGENT_FALLBACK_MODEL_ID` | Bedrock model ID | `amazon.nova-lite-v1:0` | Automatic retry model if Nova Micro fails a tool-use turn |
+| `RATEDROP_AGENT_AWS_REGION` | AWS region | `us-east-1` | Bedrock runtime region for Nova Micro |
+| `GEMINI_API_KEY` | string | optional for agent | Only used if `RATEDROP_AGENT_MODEL_PROVIDER=gemini` |
 
-No new API keys are needed. Strands passes the existing `GEMINI_API_KEY` through to Gemini 2.5
-Flash.
+No new API keys are needed for the default path. Strands uses AWS Bedrock through the configured
+AWS CLI credentials. Gemini remains available for tomorrow by setting
+`RATEDROP_AGENT_MODEL_PROVIDER=gemini`.
 
 ---
 
@@ -439,7 +450,7 @@ By default, with `RATEDROP_AGENT_MODE=strands`:
 
 | Before (hardcoded) | After (agent-generated) |
 |---|---|
-| "That's helpful, but it still doesn't really solve the bill. If you can bring the monthly rate to $55.00, we can accept that on this call." | Gemini-generated response that uses the rep's specific wording, mirrors their tone, and delivers the same counter-offer intent naturally. |
+| "That's helpful, but it still doesn't really solve the bill. If you can bring the monthly rate to $55.00, we can accept that on this call." | Nova-generated response that uses the rep's specific wording, mirrors their tone, and delivers the same counter-offer intent naturally. |
 | "Could you please check retention or loyalty options before the customer decides whether to move the line?" | Contextual push phrasing that references the specific plan, provider name, and current amount. |
 | "I understand. Could you please check retention or loyalty options…" | Natural opening that sounds like a real person on a call. |
 
